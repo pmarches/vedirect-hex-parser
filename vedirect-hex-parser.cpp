@@ -52,6 +52,25 @@ size_t readHexLine(){
   }
 }
 
+uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload){
+  uint8_t checksum=0x55;
+  for(int i=0; i<nbBytesPayload; i++){
+    checksum -= binaryPayload[i];
+  }
+  return checksum;
+}
+
+void byteToHex(uint8_t byte, char* hexStr){
+  sprintf(hexStr, "%02X", byte);
+}
+
+void encodeBytesToHex(uint8_t* bytes, uint16_t nbBytes, char* hexOut){
+  for(int i=0; i<nbBytes; i++){
+    byteToHex(bytes[i], hexOut+(i*2));
+  }
+}
+
+
 uint16_t parseHexByte(const char* hexLine){
 //  printf("parseHexByte=%s\n", hexLine);
   char hexByte[3];
@@ -87,20 +106,35 @@ uint32_t parseHexInteger(const char* hexLine){
   return strtoul(hexInteger, NULL, 16);
 }
 
-uint8_t hexCharToByte(const char hexChar){
-  if(hexChar>='0' && hexChar<='9') return '9'-hexChar;
-  if(hexChar>='A' && hexChar<='F') return 'A'-hexChar;
+uint8_t hexCharToNibble(const char hexChar){
+  if(hexChar>='0' && hexChar<='9') return hexChar-'0';
+  if(hexChar>='A' && hexChar<='F') return hexChar-'A'+10;
   return 0;
 }
 
+void hexToBytes(const char* hexLine, uint16_t hexLineLen, uint8_t* outputBytes){
+  if(hexLineLen%2!=0){
+    printf("Warning, converting a odd length hex string. There may be data loss.\n");
+  }
+  uint16_t outputBytesLen=hexLineLen/2;
+  for(int i=0; i<outputBytesLen; i++){
+    uint8_t nibbleHigh=hexCharToNibble(hexLine[i*2]);
+    uint8_t nibbleLow=hexCharToNibble(hexLine[(i*2)+1]);
+    outputBytes[i]=nibbleLow|(nibbleHigh<<4);
+//    printf("hexLine[i*2]=%c outputBytes=0x%02X nibleLow=0x%02X nibleHigh=0x%02X \n", hexLine[i*2], outputBytes[i], nibleLow, nibleHigh);
+  }
+}
+
+#if 0
 void parseHexString(const char* hexLine, char* destinationString, uint32_t maxDestinationLen){
   destinationString[maxDestinationLen-1]=0;
   for(uint8_t i=0; i<maxDestinationLen; i++){
-    uint8_t nibleHigh=hexCharToByte(hexLine[i*2]);
-    uint8_t nibleLow=hexCharToByte(hexLine[(i*2)+1]);
+    uint8_t nibleHigh=hexCharToNibble(hexLine[i*2]);
+    uint8_t nibleLow=hexCharToNibble(hexLine[(i*2)+1]);
     destinationString[i]=nibleHigh<<4|nibleLow;
   }
 }
+#endif
 
 void parseHistoryTotalRecord(const char* hexLine){
 //  uint8_t reservedByte=parseHexByte(hexLine+0);
@@ -174,20 +208,30 @@ void parseGroupId(const char* hexLine){
 
 void parseSerialNumber(const char* hexLine){
   printf("\tparseSerialNumber\n");
-  int serialNumberLen=strlen(hexLine)-2;
-  char* serialNumber=(char*) malloc(serialNumberLen+1);
-  parseHexString(hexLine, serialNumber, serialNumberLen);
-  printf("\tserialNumberLen=%s", serialNumber);
-  free(serialNumber);
+  uint16_t nbHexCharsToConvert=strlen(hexLine)-1;
+  uint8_t* payloadBytes=(uint8_t*) malloc(nbHexCharsToConvert);
+  hexToBytes(hexLine, nbHexCharsToConvert, payloadBytes);
+  printf("\tserialNumberLen=%s", (char*) payloadBytes);
+  free(payloadBytes);
+//  int serialNumberLen=strlen(hexLine)-2;
+//  char* serialNumber=(char*) malloc(serialNumberLen+1);
+//  parseHexString(hexLine, serialNumber, serialNumberLen);
+//  printf("\tserialNumberLen=%s", serialNumber);
+//  free(serialNumber);
 }
 
 void parseModelName(const char* hexLine){
   printf("\tparseModelName\n");
-  int modelNameLen=strlen(hexLine)-2;
-  char* modelName=(char*) malloc(modelNameLen+1);
-  parseHexString(hexLine, modelName, modelNameLen);
-  printf("\tmodelNameLen=%s", modelName);
-  free(modelName);
+//  int modelNameLen=strlen(hexLine)-2;
+//  char* modelName=(char*) malloc(modelNameLen+1);
+//  parseHexString(hexLine, modelName, modelNameLen);
+//  printf("\tmodelNameLen=%s", modelName);
+//  free(modelName);
+  uint16_t nbHexCharsToConvert=strlen(hexLine)-1;
+  uint8_t* payloadBytes=(uint8_t*) malloc(nbHexCharsToConvert);
+  hexToBytes(hexLine, nbHexCharsToConvert, payloadBytes);
+  printf("\tmodelName=%s\n", (char*) payloadBytes);
+  free(payloadBytes);
 }
 
 void parseCapabilities(const char* hexLine){
@@ -258,14 +302,31 @@ void parsePing(const char* hexLine){
   }
 }
 
+
 void parseHexLine(const char* hexLine){
   if(hexLine==NULL) {
     return;
   }
   printf("Parse %s", hexLine);
+
   int hexLineLen=strlen(hexLine);
-  uint8_t expectedChecksumByte=parseHexByte(hexLine+hexLineLen-2);
-  //TODO compute checksum...
+  if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
+    printf("The hexline length should start with : end with \n and be of odd length\n");
+    return;
+  }
+
+  uint16_t hexPayloadLen=hexLineLen-2; //The : and \n are not part of the payload
+  uint16_t payloadBytesLen=(hexPayloadLen/2)+1; //The payload includes the command
+  uint8_t* payloadBytes=(uint8_t*) malloc(payloadBytesLen);
+  payloadBytes[0]=hexCharToNibble(hexLine[1]); //Convert the command (first low nibble)
+  hexToBytes(hexLine+2, hexPayloadLen-1, payloadBytes+1); //Skip the command and the trailing \n
+
+  uint8_t computedChecksum=computeChecksum(payloadBytes, payloadBytesLen-1); //Do not use the checksum byte to compute the the checksum
+  if(payloadBytes[payloadBytesLen-1]!=computedChecksum){
+    printf("Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
+    free(payloadBytes);
+    return;
+  }
 
   if('1'==hexLine[1]) {
     parseDone(hexLine+2);
@@ -288,6 +349,8 @@ void parseHexLine(const char* hexLine){
   else if('A'==hexLine[1]) {
     parseAsync(hexLine+2);
   }
+
+  free(payloadBytes);
 }
 
 void sendPing(){
@@ -308,24 +371,6 @@ enum VEDIRECT_HEX_COMMAND {
     SET=8,
     ASYNC=0xA,
 };
-
-uint8_t computeChecksum(uint8_t* binaryPayload, uint8_t nbBytesPayload){
-  uint8_t checksum=0x55;
-  for(int i=0; i<nbBytesPayload; i++){
-    checksum -= binaryPayload[i];
-  }
-  return checksum;
-}
-
-void byteToHex(uint8_t byte, char* hexStr){
-  sprintf(hexStr, "%02X", byte);
-}
-
-void encodeBytesToHex(uint8_t* bytes, uint16_t nbBytes, char* hexOut){
-  for(int i=0; i<nbBytes; i++){
-    byteToHex(bytes[i], hexOut+(i*2));
-  }
-}
 
 void getRegisterValue(uint16_t registerToGet){
   const uint8_t flag=0;
