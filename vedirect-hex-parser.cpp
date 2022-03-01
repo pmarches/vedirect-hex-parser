@@ -70,42 +70,6 @@ void encodeBytesToHex(uint8_t* bytes, uint16_t nbBytes, char* hexOut){
   }
 }
 
-
-uint16_t parseHexByte(const char* hexLine){
-//  printf("parseHexByte=%s\n", hexLine);
-  char hexByte[3];
-  hexByte[0]=hexLine[0];
-  hexByte[1]=hexLine[1];
-  hexByte[2]=0;
-  return strtoul(hexByte, NULL, 16);
-}
-
-uint16_t parseHexShort(const char* hexLine){
-//  printf("parseHexShort=%s\n", hexLine);
-  char hexShort[5];
-  hexShort[0]=hexLine[2];
-  hexShort[1]=hexLine[3];
-  hexShort[2]=hexLine[0];
-  hexShort[3]=hexLine[1];
-  hexShort[4]=0;
-  return strtoul(hexShort, NULL, 16);
-}
-
-uint32_t parseHexInteger(const char* hexLine){
-//  printf("parseHexInteger=%s\n", hexLine);
-  char hexInteger[9];
-  hexInteger[0]=hexLine[6];
-  hexInteger[1]=hexLine[7];
-  hexInteger[2]=hexLine[4];
-  hexInteger[3]=hexLine[5];
-  hexInteger[4]=hexLine[2];
-  hexInteger[5]=hexLine[3];
-  hexInteger[6]=hexLine[0];
-  hexInteger[7]=hexLine[1];
-  hexInteger[8]=0;
-  return strtoul(hexInteger, NULL, 16);
-}
-
 uint8_t hexCharToNibble(const char hexChar){
   if(hexChar>='0' && hexChar<='9') return hexChar-'0';
   if(hexChar>='A' && hexChar<='F') return hexChar-'A'+10;
@@ -125,71 +89,82 @@ void hexToBytes(const char* hexLine, uint16_t hexLineLen, uint8_t* outputBytes){
   }
 }
 
-#if 0
-void parseHexString(const char* hexLine, char* destinationString, uint32_t maxDestinationLen){
-  destinationString[maxDestinationLen-1]=0;
-  for(uint8_t i=0; i<maxDestinationLen; i++){
-    uint8_t nibleHigh=hexCharToNibble(hexLine[i*2]);
-    uint8_t nibleLow=hexCharToNibble(hexLine[(i*2)+1]);
-    destinationString[i]=nibleHigh<<4|nibleLow;
-  }
-}
-#endif
+void parseHistoryTotalRecord(const uint8_t* payloadBytes){
+  typedef struct __attribute__((__packed__)) {
+      uint8_t reservedByte;
+      uint8_t errorDatabase;
+      uint8_t error0;
+      uint8_t error1;
+      uint8_t error2;
+      uint8_t error3;
+      uint32_t totalYieldUser;
+      uint32_t totalYieldSystem;
+      uint16_t maxPanelVoltage;
+      uint16_t maxBatteryVoltage;
+      uint16_t numberOfDaysAvailable;
+  } HistoryTotalRecord;
+  HistoryTotalRecord* totalRecord=(HistoryTotalRecord*) payloadBytes;
 
-void parseHistoryTotalRecord(const char* hexLine){
-//  uint8_t reservedByte=parseHexByte(hexLine+0);
-  uint8_t errorDatabase=parseHexByte(hexLine+2);
-  uint8_t error0=parseHexByte(hexLine+4);
-  uint8_t error1=parseHexByte(hexLine+6);
-  uint8_t error2=parseHexByte(hexLine+8);
-  uint8_t error3=parseHexByte(hexLine+10);
-
-  uint32_t totalYieldUser=parseHexInteger(hexLine+12);
-  uint32_t totalYieldSystem=parseHexInteger(hexLine+20);
-  uint16_t maxPanelVoltage=parseHexShort(hexLine+28);
-  uint16_t maxBatteryVoltage=parseHexShort(hexLine+32);
-  uint16_t numberOfDaysAvailable=parseHexShort(hexLine+36);
+  uint32_t totalYieldUser=le32toh(totalRecord->totalYieldUser);
+  uint32_t totalYieldSystem=le32toh(totalRecord->totalYieldSystem);
+  uint16_t maxPanelVoltage=le16toh(totalRecord->maxPanelVoltage);
+  uint16_t maxBatteryVoltage=le16toh(totalRecord->maxBatteryVoltage);
+  uint16_t numberOfDaysAvailable=le16toh(totalRecord->numberOfDaysAvailable);
 }
 
-void parseHistoryDayRecord(const char* hexLine){
+void parseHistoryDayRecord(const uint8_t* payloadBytes){
+  typedef struct __attribute__((__packed__)) {
+    uint8_t reservedByte;
+    uint32_t yield;
+    uint32_t consumed;
+    uint16_t maxBattVoltage;
+    uint16_t minBattVoltage;
+    uint8_t errorDatabase;
+    uint8_t error0;
+    uint8_t error1;
+    uint8_t error2;
+    uint8_t error3;
+    uint16_t timeBulk;
+    uint16_t timeAbsorbtion;
+    uint16_t timeFloat;
+    uint32_t maxPower;
+    uint16_t maxBattCurrent;
+    uint16_t maxPanelVoltage;
+    uint16_t daySequenceNumber;
+  } HistoryDailyRecord;
+  HistoryDailyRecord* dailyRecord=(HistoryDailyRecord*) payloadBytes;
   printf("\tparseHistoryDayRecord\n");
 //  uint8_t reservedByte=parseHexByte(hexLine+0);
-  uint32_t yield=parseHexInteger(hexLine+2);
+  uint32_t yield=le32toh(dailyRecord->yield);
   printf("\tyield=%f\n", yield*0.01);
-  uint32_t consumed=parseHexInteger(hexLine+10);//consumed by load output
-  if(consumed!=0xFFFFFFFF) printf("consumed=%f\n", consumed*0.01);
+  uint32_t consumed=le32toh(dailyRecord->consumed);//consumed by load output
+  if(consumed!=0xFFFFFFFF) printf("\tconsumed=%f\n", consumed*0.01);
 
-  uint16_t maxBattVoltage=parseHexShort(hexLine+18);
+  uint16_t maxBattVoltage=le16toh(dailyRecord->maxBattVoltage);
   printf("\tmaxBattVoltage=%f\n", maxBattVoltage*0.01);
-  uint16_t minBattVoltage=parseHexShort(hexLine+22);
+  uint16_t minBattVoltage=le16toh(dailyRecord->minBattVoltage);
   printf("\tminBattVoltage=%f\n", minBattVoltage*0.01);
 
-  uint8_t errorDatabase=parseHexByte(hexLine+26);
-  uint8_t error0=parseHexByte(hexLine+28);
-  uint8_t error1=parseHexByte(hexLine+30);
-  uint8_t error2=parseHexByte(hexLine+32);
-  uint8_t error3=parseHexByte(hexLine+34);
-
-  uint16_t timeBulk=parseHexShort(hexLine+36);
+  uint16_t timeBulk=le16toh(dailyRecord->timeBulk);
   printf("\ttimeBulk=%d\n", timeBulk);
-  uint16_t timeAbsorbtion=parseHexShort(hexLine+40);
+  uint16_t timeAbsorbtion=le16toh(dailyRecord->timeAbsorbtion);
   printf("\ttimeAbsorbtion=%d\n", timeAbsorbtion);
-  uint16_t timeFloat=parseHexShort(hexLine+44);
+  uint16_t timeFloat=le16toh(dailyRecord->timeFloat);
   printf("\ttimeFloat=%d\n", timeFloat);
 
-  uint32_t maxPower=parseHexInteger(hexLine+48);
+  uint32_t maxPower=le32toh(dailyRecord->maxPower);
   printf("\tmaxPower=%d\n", maxPower);
-  uint16_t maxBattCurrent=parseHexShort(hexLine+56);
+  uint16_t maxBattCurrent=le16toh(dailyRecord->maxBattCurrent);
   printf("\tmaxBattCurrent=%f\n", maxBattCurrent*0.1);
-  uint16_t maxPanelVoltage=parseHexShort(hexLine+60);
+  uint16_t maxPanelVoltage=le16toh(dailyRecord->maxPanelVoltage);
   printf("\tmaxPanelVoltage=%f\n", maxPanelVoltage*0.01);
-  uint16_t daySequenceNumber=parseHexShort(hexLine+64);
+  uint16_t daySequenceNumber=le16toh(dailyRecord->daySequenceNumber);
   printf("\tdaySequenceNumber=%d\n", daySequenceNumber);
 }
 
-void parseProductId(const char* hexLine){
+void parseProductId(const uint8_t* payloadBytes){
   printf("\tparseProductId\n");
-  uint16_t productId=parseHexShort(hexLine);
+  uint16_t productId=le16toh(*(uint16_t*) payloadBytes);
   printf("\tproductId=0x%X\n",productId);
   if(0xA056==productId) {
     printf("\tSmartSolar MPPT 100|30");
@@ -200,50 +175,34 @@ void parseProductId(const char* hexLine){
   //TODO etc.. Get the list from the PDF
 }
 
-void parseGroupId(const char* hexLine){
+void parseGroupId(const uint8_t* payloadBytes){
   printf("\tparseGroupId\n");
-  uint8_t groupId=parseHexByte(hexLine);
-  printf("\tgroupId=%d\n", groupId);
+  printf("\tgroupId=%d\n", *payloadBytes);
 }
 
-void parseSerialNumber(const char* hexLine){
+void parseSerialNumber(const uint8_t* payloadBytes){
   printf("\tparseSerialNumber\n");
-  uint16_t nbHexCharsToConvert=strlen(hexLine)-1;
-  uint8_t* payloadBytes=(uint8_t*) malloc(nbHexCharsToConvert);
-  hexToBytes(hexLine, nbHexCharsToConvert, payloadBytes);
-  printf("\tserialNumberLen=%s", (char*) payloadBytes);
-  free(payloadBytes);
-//  int serialNumberLen=strlen(hexLine)-2;
-//  char* serialNumber=(char*) malloc(serialNumberLen+1);
-//  parseHexString(hexLine, serialNumber, serialNumberLen);
-//  printf("\tserialNumberLen=%s", serialNumber);
-//  free(serialNumber);
+  char* serialNumber=(char*)payloadBytes;
+  int serialNumberLen=4;
+  printf("\tserialNumber=%.*s", serialNumberLen, serialNumber);
 }
 
-void parseModelName(const char* hexLine){
+void parseModelName(const uint8_t* payloadBytes){
   printf("\tparseModelName\n");
-//  int modelNameLen=strlen(hexLine)-2;
-//  char* modelName=(char*) malloc(modelNameLen+1);
-//  parseHexString(hexLine, modelName, modelNameLen);
-//  printf("\tmodelNameLen=%s", modelName);
-//  free(modelName);
-  uint16_t nbHexCharsToConvert=strlen(hexLine)-1;
-  uint8_t* payloadBytes=(uint8_t*) malloc(nbHexCharsToConvert);
-  hexToBytes(hexLine, nbHexCharsToConvert, payloadBytes);
-  printf("\tmodelName=%s\n", (char*) payloadBytes);
-  free(payloadBytes);
+  char* modelName=(char*) payloadBytes;
+  printf("\tmodelName=%s\n", modelName);
 }
 
-void parseCapabilities(const char* hexLine){
-  uint32_t capabilities=parseHexInteger(hexLine);
+void parseCapabilities(const uint8_t* payloadBytes){
+  uint32_t capabilities=le32toh(*(uint32_t*)payloadBytes);
   printf("\tparseCapabilities\n");
   printf("\tcapabilities=0x%X\n", capabilities);
 }
 
-void parseGet(const char* hexLine){
+void parseGet(const uint8_t* payloadBytes){
   printf("Parse GET response\n");
-  uint16_t registerId=parseHexShort(hexLine);
-  uint8_t flag=parseHexByte(hexLine+4);
+  uint16_t registerId=le16toh(*(uint16_t*) (payloadBytes+1));
+  uint8_t flag=*(payloadBytes+3);
   printf("registerId=0x%X flag=%d\n", registerId, flag);
   if(flag!=0){
     printf("Something is wrong with that flag");
@@ -251,54 +210,51 @@ void parseGet(const char* hexLine){
   }
 
   if(0x0100==registerId){
-    parseProductId(hexLine+6);
+    parseProductId(payloadBytes+4);
   }
   else if(0x0104==registerId){
-    parseGroupId(hexLine+6);
+    parseGroupId(payloadBytes+4);
   }
   else if(0x010A==registerId){
-    parseSerialNumber(hexLine+6);
+    parseSerialNumber(payloadBytes+4);
   }
   else if(0x010B==registerId){
-    parseModelName(hexLine+6);
+    parseModelName(payloadBytes+4);
   }
   else if(0x0140==registerId){
-    parseCapabilities(hexLine+6);
+    parseCapabilities(payloadBytes+4);
   }
   else if(0x0201==registerId){
-    printf("\tDevicestate=%d\n", parseHexByte(hexLine+6));
+    uint8_t deviceState=*(payloadBytes+4);
+    printf("\tDevicestate=%d\n", deviceState);
   }
   else if(0x1050<=registerId && 0x106E>=registerId){
-    parseHistoryDayRecord(hexLine+6);
+    parseHistoryDayRecord(payloadBytes+4);
   }
 }
 
-void parseAsync(const char* hexLine){
+void parseAsync(const uint8_t* payloadBytes){
   printf("Parse ASYNC response\n");
-  parseGet(hexLine);
+  parseGet(payloadBytes);
 }
 
-void parseDone(const char* hexLine){
-  printf("Parse DONE response\n");
-  //Parsing DONe depends on the last command we sent...
+void parseDone(const uint8_t* payloadBytes){
+  printf("TODO Parse DONE response\n");
+  //Parsing DONE messages depends on the last command we sent...
 }
 
-void parsePing(const char* hexLine){
+void parsePing(const uint8_t* payloadBytes){
   printf("Parse ping response\n");
-
-  char hexShort[5];
-  hexShort[0]=hexLine[4];
-  hexShort[1]=hexLine[5];
-  hexShort[2]=hexLine[2];
-  hexShort[3]=hexLine[3];
-//  printf("hexShort=%s\n", hexShort);
-  uint8_t firmwareVersionNible = '9'-hexShort[0];
-  uint8_t appType=firmwareVersionNible&0b1100;
-
-//  printf("appType=%d\n", appType);
-  if(4==appType){
-    uint8_t rcVersion=firmwareVersionNible&0b0011;
-    printf("\tApplication Version:%s RC=%d \n", hexShort+1, rcVersion);
+  uint16_t typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
+  printf("\ttypeAndVersion=0x%02X\n", typeAndVersion);
+  uint8_t appType=typeAndVersion>>14;
+  printf("appType=%d\n", appType);
+  if(3==appType){
+    uint8_t rcVersion=payloadBytes[1]&0b00111111;
+    printf("\tbooloader RC=%d \n", rcVersion);
+  }
+  else{
+    printf("\tversion=%02X\n", typeAndVersion&0b0011111111111111);
   }
 }
 
@@ -328,26 +284,26 @@ void parseHexLine(const char* hexLine){
     return;
   }
 
-  if('1'==hexLine[1]) {
-    parseDone(hexLine+2);
+  if(0x1==payloadBytes[0]) {
+    parseDone(payloadBytes);
   }
-  else if('3'==hexLine[1]) {
+  else if(0x3==payloadBytes[0]) {
     printf("Got UNKNOWN message\n");
   }
-  else if('4'==hexLine[1]) {
+  else if(0x4==payloadBytes[0]) {
     printf("Got ERROR message\n");
   }
-  else if('5'==hexLine[1]) {
-    parsePing(hexLine+2);
+  else if(0x5==payloadBytes[0]) {
+    parsePing(payloadBytes);
   }
-  else if('7'==hexLine[1]) {
-    parseGet(hexLine+2);
+  else if(0x7==payloadBytes[0]) {
+    parseGet(payloadBytes);
   }
-  else if('8'==hexLine[1]) {
+  else if(0x8==payloadBytes[0]) {
     printf("Got SET response\n");
   }
-  else if('A'==hexLine[1]) {
-    parseAsync(hexLine+2);
+  else if(0xA==payloadBytes[0]) {
+    parseAsync(payloadBytes);
   }
 
   free(payloadBytes);
@@ -417,6 +373,7 @@ void testParser(){
 //  parseHexLine(":A4F10000100000000006E5A00006E5A00008E12F9051E9604FFFFFFFFFFFFFFFFFFFFFFFFFF12\n");
   parseHexLine(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n");
   parseHexLine(":A0102000543\n");
+  parseHexLine(":8F0ED0064000C\n");
 }
 
 int main(int argc, char **argv) {
