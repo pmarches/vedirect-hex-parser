@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <memory.h>
 #include <arpa/inet.h>
+#include "vhp_registers.h"
 
 #define SERIAL_DEVICE_PATH "/dev/ttyUSB0"
 
@@ -36,17 +37,17 @@ void sendToVedirectSerial(char* hexBuffer, size_t hexBufferLen){
 size_t readHexLine(){
   memset(readBuffer, 0, sizeof(readBuffer));
   while(true){
-    int nbBytesRead=read(serialFd, readBuffer, sizeof(readBuffer));
+    int nbBytesRead=read(serialFd, readBuffer, sizeof(readBuffer)-1);
     if(nbBytesRead<0){
       continue;
     }
-    if(readBuffer[0]!=':' || readBuffer[nbBytesRead-1]!='\n'){
-      printf("Read did not finish at line ending\n");
-      return 0;
+    readBuffer[nbBytesRead]=0;
+    if(readBuffer[0]==':' && readBuffer[nbBytesRead-1]=='\n'){
+      //      printf("Read %d bytes, %.*s", nbBytesRead, nbBytesRead, readBuffer);
+      return nbBytesRead;
     }
     else{
-//      printf("Read %d bytes, %.*s", nbBytesRead, nbBytesRead, readBuffer);
-      return nbBytesRead;
+      printf("Read did not finish at a line ending, ignoring\n");
     }
   }
 }
@@ -220,6 +221,9 @@ void parseGet(const char* hexLine){
   else if(0x0140==registerId){
     parseCapabilities(hexLine+6);
   }
+  else if(0x0201==registerId){
+    printf("\tDevicestate=%d\n", parseHexByte(hexLine+6));
+  }
   else if(0x1050<=registerId && 0x106E>=registerId){
     parseHistoryDayRecord(hexLine+6);
   }
@@ -259,7 +263,10 @@ void parseHexLine(const char* hexLine){
     return;
   }
   printf("Parse %s", hexLine);
-  //TODO Checksum...
+  int hexLineLen=strlen(hexLine);
+  uint8_t expectedChecksumByte=parseHexByte(hexLine+hexLineLen-2);
+  //TODO compute checksum...
+
   if('1'==hexLine[1]) {
     parseDone(hexLine+2);
   }
@@ -284,16 +291,65 @@ void parseHexLine(const char* hexLine){
 }
 
 void sendPing(){
-//  char hexBuffer[]={1,5,4};
-//  size_t hexBufferLen=sizeof(hexBuffer);
-//  sendToVedirectSerial(hexBuffer, hexBufferLen);
   char buffer[]={':', '1', '5', '4', '\n'};
   write(serialFd, buffer, sizeof(buffer));
 
-  while(true){
-    size_t hexLineLen=readHexLine();
-    parseHexLine(readBuffer);
+  size_t hexLineLen=readHexLine();
+  parseHexLine(readBuffer);
+}
+
+enum VEDIRECT_HEX_COMMAND {
+    ENTER_BOOT=0,
+    PING=1,
+    APP_VERSION=3,
+    PRODUCT_ID=4,
+    RESTART=6,
+    GET=7,
+    SET=8,
+    ASYNC=0xA,
+};
+
+uint8_t computeChecksum(uint8_t* binaryPayload, uint8_t nbBytesPayload){
+  uint8_t checksum=0x55;
+  for(int i=0; i<nbBytesPayload; i++){
+    checksum -= binaryPayload[i];
   }
+  return checksum;
+}
+
+void byteToHex(uint8_t byte, char* hexStr){
+  sprintf(hexStr, "%02X", byte);
+}
+
+void encodeBytesToHex(uint8_t* bytes, uint16_t nbBytes, char* hexOut){
+  for(int i=0; i<nbBytes; i++){
+    byteToHex(bytes[i], hexOut+(i*2));
+  }
+}
+
+void getRegisterValue(uint16_t registerToGet){
+  const uint8_t flag=0;
+  uint8_t binaryPayload[]={
+      GET,
+      (uint8_t)  (registerToGet&0x00FF),
+      (uint8_t) ((registerToGet&0xFF00)>>8),
+      flag,
+      0
+  };
+  binaryPayload[4]=computeChecksum(binaryPayload, 4);
+  uint16_t nbBytesOfHexMessage=1+sizeof(binaryPayload)*2+1;
+  char* hexMessage=(char*) malloc(nbBytesOfHexMessage+1);
+  encodeBytesToHex(binaryPayload, 4+2, hexMessage);
+  hexMessage[0]=':';
+  hexMessage[nbBytesOfHexMessage-2]='\n';
+  hexMessage[nbBytesOfHexMessage-1]=0;
+
+  printf("hexMessage=%s\n", hexMessage);
+  free(hexMessage);
+}
+
+void setRegisterValue(uint32_t registerToSet, uint32_t value){
+
 }
 
 #if 0
@@ -315,13 +371,20 @@ void testParser(){
   parseHexLine(":11641FD\n");
 //  parseHexLine(":A4F10000100000000006E5A00006E5A00008E12F9051E9604FFFFFFFFFFFFFFFFFFFFFFFFFF12\n");
   parseHexLine(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n");
+  parseHexLine(":A0102000543\n");
 }
 
 int main(int argc, char **argv) {
+#if 1
   testParser();
+  getRegisterValue(0xEDF0);
+  getRegisterValue(0x0FFF);
+  setRegisterValue(0xEDF0, 0x0064);
   return 0;
-	configureSerialPort();
+#else
+  configureSerialPort();
 //	emptyReadBuffer();
 	sendPing();
 	return 0;
+#endif
 }
