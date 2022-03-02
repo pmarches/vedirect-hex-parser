@@ -25,15 +25,6 @@ void configureSerialPort(){
   }
 }
 
-void sendToVedirectSerial(char* hexBuffer, size_t hexBufferLen){
-  if(hexBufferLen==0 || hexBuffer==NULL){
-    return;
-  }
-  write(serialFd, ":", 1);
-  write(serialFd, hexBuffer, hexBufferLen);
-  write(serialFd, "\n", 1);
-}
-
 size_t readHexLine(){
   memset(readBuffer, 0, sizeof(readBuffer));
   while(true){
@@ -64,7 +55,7 @@ void byteToHex(uint8_t byte, char* hexStr){
   sprintf(hexStr, "%02X", byte);
 }
 
-void encodeBytesToHex(uint8_t* bytes, uint16_t nbBytes, char* hexOut){
+void bytesToHex(const uint8_t* bytes, const uint16_t nbBytes, char* hexOut){
   for(int i=0; i<nbBytes; i++){
     byteToHex(bytes[i], hexOut+(i*2));
   }
@@ -166,13 +157,12 @@ void parseProductId(const uint8_t* payloadBytes){
   printf("\tparseProductId\n");
   uint16_t productId=le16toh(*(uint16_t*) payloadBytes);
   printf("\tproductId=0x%X\n",productId);
-  if(0xA056==productId) {
-    printf("\tSmartSolar MPPT 100|30");
+  const ProductDescription* productDesc=lookupProductId(productId);
+  if(productDesc==NULL){
+    printf("Product id not found\n");
+    return;
   }
-  else if(0xA062==productId) {
-    printf("\tSmartSolar MPPT 150|60");
-  }
-  //TODO etc.. Get the list from the PDF
+  printf("\tProduct name is %s\n", productDesc->productName);
 }
 
 void parseGroupId(const uint8_t* payloadBytes){
@@ -184,7 +174,7 @@ void parseSerialNumber(const uint8_t* payloadBytes){
   printf("\tparseSerialNumber\n");
   char* serialNumber=(char*)payloadBytes;
   int serialNumberLen=4;
-  printf("\tserialNumber=%.*s", serialNumberLen, serialNumber);
+  printf("\tserialNumber=%.*s\n", serialNumberLen, serialNumber);
 }
 
 void parseModelName(const uint8_t* payloadBytes){
@@ -203,10 +193,28 @@ void parseGet(const uint8_t* payloadBytes){
   printf("Parse GET response\n");
   uint16_t registerId=le16toh(*(uint16_t*) (payloadBytes+1));
   uint8_t flag=*(payloadBytes+3);
-  printf("registerId=0x%X flag=%d\n", registerId, flag);
+  printf("registerId=0x%04X flag=%d\n", registerId, flag);
   if(flag!=0){
     printf("Something is wrong with that flag");
     return;
+  }
+  const RegisterDesc* registerDesc=lookupRegister(registerId);
+  if(NULL==registerDesc){
+    printf("Did not find a description of this register\n");
+    return;
+  }
+  printf("\tRegister for '%s'\n", registerDesc->desc);
+  if(registerDesc->byteLen==1){
+    uint8_t simpleByte=*(payloadBytes+4);
+    printf("\tSimple byte value %0.2f%s\n", simpleByte*registerDesc->scale, registerDesc->unit);
+  }
+  else if(registerDesc->byteLen==2){
+    uint16_t shortValue=le16toh(*(uint16_t*) (payloadBytes+4));
+    printf("\tShort value %0.2f%s\n", shortValue*registerDesc->scale, registerDesc->unit);
+  }
+  else if(registerDesc->byteLen==4){
+    uint32_t intValue=le32toh(*(uint32_t*) (payloadBytes+4));
+    printf("\tInt value %0.2f%s\n", intValue*registerDesc->scale, registerDesc->unit);
   }
 
   if(0x0100==registerId){
@@ -248,7 +256,7 @@ void parsePing(const uint8_t* payloadBytes){
   uint16_t typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
   printf("\ttypeAndVersion=0x%02X\n", typeAndVersion);
   uint8_t appType=typeAndVersion>>14;
-  printf("appType=%d\n", appType);
+  printf("\tappType=%d\n", appType);
   if(3==appType){
     uint8_t rcVersion=payloadBytes[1]&0b00111111;
     printf("\tbooloader RC=%d \n", rcVersion);
@@ -266,6 +274,10 @@ void parseHexLine(const char* hexLine){
   printf("Parse %s", hexLine);
 
   int hexLineLen=strlen(hexLine);
+  if(hexLineLen<5){
+    printf("Hexline is too short\n");
+    return;
+  }
   if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
     printf("The hexline length should start with : end with \n and be of odd length\n");
     return;
@@ -309,10 +321,27 @@ void parseHexLine(const char* hexLine){
   free(payloadBytes);
 }
 
-void sendPing(){
-  char buffer[]={':', '1', '5', '4', '\n'};
-  write(serialFd, buffer, sizeof(buffer));
+void sendBytes(const uint8_t* payload, const uint16_t payloadLen){
+  if(payloadLen<1){
+    printf("ERROR: The payload must include the command as the first byte\n");
+    return;
+  }
+  uint16_t hexLineLen=payloadLen*2+2+1; //Add checksum, \n
+  char* hexLine=(char*) malloc(hexLineLen+1); //Add \0
+  memset(hexLine, 0, hexLineLen+1);
+  byteToHex(payload[0], hexLine);
+  hexLine[0]=':';
+  bytesToHex(payload+1, payloadLen-1, hexLine+2);
+  sprintf(hexLine+hexLineLen-3, "%02X\n", computeChecksum(payload, payloadLen));
 
+  write(serialFd, hexLine, hexLineLen);
+  free(hexLine);
+}
+
+void sendPing(){
+  printf("ANSWER: :51641F9\n");
+  uint8_t pingCommandBytes[]={0x01};
+  sendBytes(pingCommandBytes, 1);
   size_t hexLineLen=readHexLine();
   parseHexLine(readBuffer);
 }
@@ -330,42 +359,45 @@ enum VEDIRECT_HEX_COMMAND {
 
 void getRegisterValue(uint16_t registerToGet){
   const uint8_t flag=0;
+#if 0
   uint8_t binaryPayload[]={
       GET,
       (uint8_t)  (registerToGet&0x00FF),
       (uint8_t) ((registerToGet&0xFF00)>>8),
       flag,
-      0
+      0 //placeholder
   };
   binaryPayload[4]=computeChecksum(binaryPayload, 4);
   uint16_t nbBytesOfHexMessage=1+sizeof(binaryPayload)*2+1;
   char* hexMessage=(char*) malloc(nbBytesOfHexMessage+1);
-  encodeBytesToHex(binaryPayload, 4+2, hexMessage);
+  bytesToHex(binaryPayload, 4+2, hexMessage);
   hexMessage[0]=':';
   hexMessage[nbBytesOfHexMessage-2]='\n';
   hexMessage[nbBytesOfHexMessage-1]=0;
 
   printf("hexMessage=%s\n", hexMessage);
   free(hexMessage);
-}
-
-void setRegisterValue(uint32_t registerToSet, uint32_t value){
-
-}
-
-#if 0
-void emptyReadBuffer(){
-  printf("Emptying serial buffer\n");
-  char readBuffer[32];
-  while(true){
-    if(read(serialFd, readBuffer, sizeof(readBuffer))<=0){
-      break;
-    }
-//    printf("readBuffer=%c\n", readBuffer[0]);
-  }
-  printf("Done emptying serial buffer\n");
-}
 #endif
+  uint8_t commandBytes[]={
+      GET,
+      (uint8_t)  (registerToGet&0x00FF),
+      (uint8_t) ((registerToGet&0xFF00)>>8),
+      flag,
+  };
+  sendBytes(commandBytes, 4);
+  size_t hexLineLen=readHexLine();
+  parseHexLine(readBuffer);
+}
+
+void requestModelName(){
+  printf("ANSWER: :70A010061626364B9\n");
+  getRegisterValue(0x010A);
+}
+
+void requestProductId(){
+  printf("ANSWER: :700010048A065\n");
+  getRegisterValue(0x0100);
+}
 
 void testParser(){
   parseHexLine(":51641F9\n");
@@ -377,16 +409,21 @@ void testParser(){
 }
 
 int main(int argc, char **argv) {
-#if 1
+#if 0
   testParser();
+  printf("ANSWER: :7F0ED009600DB\n");
   getRegisterValue(0xEDF0);
-  getRegisterValue(0x0FFF);
-  setRegisterValue(0xEDF0, 0x0064);
   return 0;
 #else
   configureSerialPort();
-//	emptyReadBuffer();
 	sendPing();
+	requestProductId();
+	requestModelName();
+
+//	while(true){
+//	  size_t hexLineLen=readHexLine();
+//	  parseHexLine(readBuffer);
+//	}
 	return 0;
 #endif
 }
