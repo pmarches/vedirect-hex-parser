@@ -7,41 +7,9 @@
 #include <unistd.h>
 #include <memory.h>
 #include <arpa/inet.h>
+
 #include "vhp_registers.h"
-
-#define SERIAL_DEVICE_PATH "/dev/ttyUSB0"
-
-int serialFd;
-int readBufferLen=0;
-char readBuffer[256];
-
-void configureSerialPort(){
-  system("stty -F " SERIAL_DEVICE_PATH " 19200 cs8 -cstopb -parenb");
-  serialFd=open(SERIAL_DEVICE_PATH, O_RDWR|O_NONBLOCK);
-  if(serialFd<0){
-    perror("Failed to open serial device, using stdout");
-    serialFd=1;
-//    exit(0);
-  }
-}
-
-size_t readHexLine(){
-  memset(readBuffer, 0, sizeof(readBuffer));
-  while(true){
-    int nbBytesRead=read(serialFd, readBuffer, sizeof(readBuffer)-1);
-    if(nbBytesRead<0){
-      continue;
-    }
-    readBuffer[nbBytesRead]=0;
-    if(readBuffer[0]==':' && readBuffer[nbBytesRead-1]=='\n'){
-      //      printf("Read %d bytes, %.*s", nbBytesRead, nbBytesRead, readBuffer);
-      return nbBytesRead;
-    }
-    else{
-      printf("Read did not finish at a line ending, ignoring\n");
-    }
-  }
-}
+#include "vhp_parser.h"
 
 uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload){
   uint8_t checksum=0x55;
@@ -98,6 +66,7 @@ void parseHistoryTotalRecord(const uint8_t* payloadBytes){
 
   uint32_t totalYieldUser=le32toh(totalRecord->totalYieldUser);
   uint32_t totalYieldSystem=le32toh(totalRecord->totalYieldSystem);
+  printf("\ttotalYieldSystem=%d\n", totalYieldSystem);
   uint16_t maxPanelVoltage=le16toh(totalRecord->maxPanelVoltage);
   uint16_t maxBatteryVoltage=le16toh(totalRecord->maxBatteryVoltage);
   uint16_t numberOfDaysAvailable=le16toh(totalRecord->numberOfDaysAvailable);
@@ -189,16 +158,23 @@ void parseCapabilities(const uint8_t* payloadBytes){
   printf("\tcapabilities=0x%X\n", capabilities);
 }
 
-void parseGet(const uint8_t* payloadBytes){
+void parseGet(const uint8_t* payloadBytes, VHParsedSentence* sentence){
+#if 1
   printf("Parse GET response\n");
-  uint16_t registerId=le16toh(*(uint16_t*) (payloadBytes+1));
+  if(sentence==NULL){
+    printf("Got a NULL sentence\n");
+    return;
+  }
+  sentence->sentenceType=VHParsedSentence::GET_REGISTER;
+  sentence->sentence.getRegisterResponse=new ParsedSentenceGetRegister();
+  sentence->sentence.getRegisterResponse->registerId=le16toh(*(uint16_t*) (payloadBytes+1));
   uint8_t flag=*(payloadBytes+3);
-  printf("registerId=0x%04X flag=%d\n", registerId, flag);
+  printf("registerId=0x%04X flag=%d\n", sentence->sentence.getRegisterResponse->registerId, flag);
   if(flag!=0){
     printf("Something is wrong with that flag");
     return;
   }
-  const RegisterDesc* registerDesc=lookupRegister(registerId);
+  const RegisterDesc* registerDesc=lookupRegister(sentence->sentence.getRegisterResponse->registerId);
   if(NULL==registerDesc){
     printf("Did not find a description of this register\n");
     return;
@@ -217,33 +193,34 @@ void parseGet(const uint8_t* payloadBytes){
     printf("\tInt value %0.2f%s\n", intValue*registerDesc->scale, registerDesc->unit);
   }
 
-  if(0x0100==registerId){
+  if(0x0100==sentence->sentence.getRegisterResponse->registerId){
     parseProductId(payloadBytes+4);
   }
-  else if(0x0104==registerId){
+  else if(0x0104==sentence->sentence.getRegisterResponse->registerId){
     parseGroupId(payloadBytes+4);
   }
-  else if(0x010A==registerId){
+  else if(0x010A==sentence->sentence.getRegisterResponse->registerId){
     parseSerialNumber(payloadBytes+4);
   }
-  else if(0x010B==registerId){
+  else if(0x010B==sentence->sentence.getRegisterResponse->registerId){
     parseModelName(payloadBytes+4);
   }
-  else if(0x0140==registerId){
+  else if(0x0140==sentence->sentence.getRegisterResponse->registerId){
     parseCapabilities(payloadBytes+4);
   }
-  else if(0x0201==registerId){
-    uint8_t deviceState=*(payloadBytes+4);
-    printf("\tDevicestate=%d\n", deviceState);
-  }
-  else if(0x1050<=registerId && 0x106E>=registerId){
+  else if(0x1050<=sentence->sentence.getRegisterResponse->registerId && 0x106E>=sentence->sentence.getRegisterResponse->registerId){
     parseHistoryDayRecord(payloadBytes+4);
   }
+  else if(0x104F==sentence->sentence.getRegisterResponse->registerId){
+    parseHistoryTotalRecord(payloadBytes+4);
+  }
+#endif
 }
 
 void parseAsync(const uint8_t* payloadBytes){
   printf("Parse ASYNC response\n");
-  parseGet(payloadBytes);
+  VHParsedSentence sentence;
+  parseGet(payloadBytes, &sentence);
 }
 
 void parseDone(const uint8_t* payloadBytes){
@@ -267,11 +244,11 @@ void parsePing(const uint8_t* payloadBytes){
 }
 
 
-void parseHexLine(const char* hexLine){
+void parseHexLine(const char* hexLine, VHParsedSentence* sentence){
   if(hexLine==NULL) {
     return;
   }
-  printf("Parse %s", hexLine);
+  printf("Parsing %s", hexLine);
 
   int hexLineLen=strlen(hexLine);
   if(hexLineLen<5){
@@ -309,7 +286,7 @@ void parseHexLine(const char* hexLine){
     parsePing(payloadBytes);
   }
   else if(0x7==payloadBytes[0]) {
-    parseGet(payloadBytes);
+    parseGet(payloadBytes, sentence);
   }
   else if(0x8==payloadBytes[0]) {
     printf("Got SET response\n");
@@ -321,109 +298,27 @@ void parseHexLine(const char* hexLine){
   free(payloadBytes);
 }
 
-void sendBytes(const uint8_t* payload, const uint16_t payloadLen){
-  if(payloadLen<1){
-    printf("ERROR: The payload must include the command as the first byte\n");
-    return;
-  }
-  uint16_t hexLineLen=payloadLen*2+2+1; //Add checksum, \n
-  char* hexLine=(char*) malloc(hexLineLen+1); //Add \0
-  memset(hexLine, 0, hexLineLen+1);
-  byteToHex(payload[0], hexLine);
-  hexLine[0]=':';
-  bytesToHex(payload+1, payloadLen-1, hexLine+2);
-  sprintf(hexLine+hexLineLen-3, "%02X\n", computeChecksum(payload, payloadLen));
-
-  write(serialFd, hexLine, hexLineLen);
-  free(hexLine);
-}
-
-void sendPing(){
-  printf("ANSWER: :51641F9\n");
-  uint8_t pingCommandBytes[]={0x01};
-  sendBytes(pingCommandBytes, 1);
-  size_t hexLineLen=readHexLine();
-  parseHexLine(readBuffer);
-}
-
-enum VEDIRECT_HEX_COMMAND {
-    ENTER_BOOT=0,
-    PING=1,
-    APP_VERSION=3,
-    PRODUCT_ID=4,
-    RESTART=6,
-    GET=7,
-    SET=8,
-    ASYNC=0xA,
-};
-
-void getRegisterValue(uint16_t registerToGet){
-  const uint8_t flag=0;
-#if 0
-  uint8_t binaryPayload[]={
-      GET,
-      (uint8_t)  (registerToGet&0x00FF),
-      (uint8_t) ((registerToGet&0xFF00)>>8),
-      flag,
-      0 //placeholder
-  };
-  binaryPayload[4]=computeChecksum(binaryPayload, 4);
-  uint16_t nbBytesOfHexMessage=1+sizeof(binaryPayload)*2+1;
-  char* hexMessage=(char*) malloc(nbBytesOfHexMessage+1);
-  bytesToHex(binaryPayload, 4+2, hexMessage);
-  hexMessage[0]=':';
-  hexMessage[nbBytesOfHexMessage-2]='\n';
-  hexMessage[nbBytesOfHexMessage-1]=0;
-
-  printf("hexMessage=%s\n", hexMessage);
-  free(hexMessage);
-#endif
-  uint8_t commandBytes[]={
-      GET,
-      (uint8_t)  (registerToGet&0x00FF),
-      (uint8_t) ((registerToGet&0xFF00)>>8),
-      flag,
-  };
-  sendBytes(commandBytes, 4);
-  size_t hexLineLen=readHexLine();
-  parseHexLine(readBuffer);
-}
-
-void requestModelName(){
-  printf("ANSWER: :70A010061626364B9\n");
-  getRegisterValue(0x010A);
-}
-
-void requestProductId(){
-  printf("ANSWER: :700010048A065\n");
-  getRegisterValue(0x0100);
+void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* payloadBytes){
+  payloadBytes[0]=GET;
+  payloadBytes[1]=(uint8_t)  (registerToGet&0x00FF); //TODO Convert to little endian properly
+  payloadBytes[2]=(uint8_t) ((registerToGet&0xFF00)>>8); //TODO Convert to little endian properly
+  payloadBytes[3]=flag;
 }
 
 void testParser(){
-  parseHexLine(":51641F9\n");
-  parseHexLine(":11641FD\n");
-//  parseHexLine(":A4F10000100000000006E5A00006E5A00008E12F9051E9604FFFFFFFFFFFFFFFFFFFFFFFFFF12\n");
-  parseHexLine(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n");
-  parseHexLine(":A0102000543\n");
-  parseHexLine(":8F0ED0064000C\n");
-}
+  VHParsedSentence sentence;
+  parseHexLine(":51641F9\n", &sentence);
 
-int main(int argc, char **argv) {
-#if 0
-  testParser();
-  printf("ANSWER: :7F0ED009600DB\n");
-  getRegisterValue(0xEDF0);
-  return 0;
-#else
-  configureSerialPort();
-	sendPing();
-	requestProductId();
-	requestModelName();
-
-//	while(true){
-//	  size_t hexLineLen=readHexLine();
-//	  parseHexLine(readBuffer);
-//	}
-	return 0;
-#endif
+  parseHexLine(":11641FD\n", &sentence);
+//  parseHexLine(":A4F10000100000000006E5A00006E5A00008E12F9051E9604FFFFFFFFFFFFFFFFFFFFFFFFFF12\n", &sentence);
+  parseHexLine(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n", &sentence);
+  parseHexLine(":A4F10000100000000005655010056550100EB36FC051E7500FFFFFFFFFFFFFFFFFFFFFFFFFFEB\n", &sentence);
+  parseHexLine(":A0102000543\n", &sentence);
+  parseHexLine(":8F0ED0064000C\n", &sentence);
+  parseHexLine(":ABCED002209000077\n", &sentence);
+  parseHexLine(":AD5ED0009057B\n", &sentence);
+  parseHexLine(":ABBED00081C7F\n", &sentence);
+  parseHexLine(":ABDED0002009F\n", &sentence);
+  parseHexLine(":A0702000000000042\n", &sentence);
+  parseHexLine(":A0202000200000045\n", &sentence);
 }
