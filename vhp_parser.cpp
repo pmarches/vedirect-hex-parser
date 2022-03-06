@@ -174,24 +174,9 @@ void parseGet(const uint8_t* payloadBytes, VHParsedSentence* sentence){
     printf("Something is wrong with that flag");
     return;
   }
-  const RegisterDesc* registerDesc=lookupRegister(sentence->sentence.getRegisterResponse->registerId);
-  if(NULL==registerDesc){
-    printf("Did not find a description of this register\n");
-    return;
-  }
-  printf("\tRegister for '%s'\n", registerDesc->desc);
-  if(registerDesc->byteLen==1){
-    uint8_t simpleByte=*(payloadBytes+4);
-    printf("\tSimple byte value %0.2f%s\n", simpleByte*registerDesc->scale, registerDesc->unit);
-  }
-  else if(registerDesc->byteLen==2){
-    uint16_t shortValue=le16toh(*(uint16_t*) (payloadBytes+4));
-    printf("\tShort value %0.2f%s\n", shortValue*registerDesc->scale, registerDesc->unit);
-  }
-  else if(registerDesc->byteLen==4){
-    uint32_t intValue=le32toh(*(uint32_t*) (payloadBytes+4));
-    printf("\tInt value %0.2f%s\n", intValue*registerDesc->scale, registerDesc->unit);
-  }
+  uint8_t simpleByte=*(payloadBytes+4);
+  uint16_t shortValue=le16toh(*(uint16_t*) (payloadBytes+4));
+  uint32_t intValue=le32toh(*(uint32_t*) (payloadBytes+4));
 
   if(0x0100==sentence->sentence.getRegisterResponse->registerId){
     parseProductId(payloadBytes+4);
@@ -228,18 +213,15 @@ void parseDone(const uint8_t* payloadBytes){
   //Parsing DONE messages depends on the last command we sent...
 }
 
-void parsePing(const uint8_t* payloadBytes){
+void parsePing(const uint8_t* payloadBytes, VHParsedSentence* sentence){
   printf("Parse ping response\n");
-  uint16_t typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
-  printf("\ttypeAndVersion=0x%02X\n", typeAndVersion);
-  uint8_t appType=typeAndVersion>>14;
-  printf("\tappType=%d\n", appType);
-  if(3==appType){
-    uint8_t rcVersion=payloadBytes[1]&0b00111111;
-    printf("\tbooloader RC=%d \n", rcVersion);
-  }
-  else{
-    printf("\tversion=%02X\n", typeAndVersion&0b0011111111111111);
+  sentence->sentenceType=VHParsedSentence::PING;
+  sentence->sentence.pingResponse=new ParsedSentencePingResponse();
+
+  sentence->sentence.pingResponse->typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
+  sentence->sentence.pingResponse->appType=sentence->sentence.pingResponse->typeAndVersion>>14;
+  if(3==sentence->sentence.pingResponse->appType){
+    sentence->sentence.pingResponse->rcVersion=payloadBytes[1]&0b00111111;
   }
 }
 
@@ -283,7 +265,7 @@ void parseHexLine(const char* hexLine, VHParsedSentence* sentence){
     printf("Got ERROR message\n");
   }
   else if(0x5==payloadBytes[0]) {
-    parsePing(payloadBytes);
+    parsePing(payloadBytes, sentence);
   }
   else if(0x7==payloadBytes[0]) {
     parseGet(payloadBytes, sentence);

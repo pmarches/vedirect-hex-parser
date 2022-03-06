@@ -22,6 +22,9 @@ typedef struct {
 } ParsedSentenceModelName;
 
 typedef struct {
+  uint16_t typeAndVersion;
+  uint8_t appType;
+  uint8_t rcVersion;
 } ParsedSentencePingResponse;
 
 typedef struct {

@@ -10,7 +10,7 @@
 class VHPSerial {
 public:
   virtual void configure()=0;
-  virtual void writeHexLine(char* hexLine, uint16_t hexLineLen)=0;
+  virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen)=0;
   virtual const std::string readLine()=0;
 
   /***
@@ -105,14 +105,15 @@ public:
 
 class LinuxSerial : public VHPSerial {
 public:
-  LinuxSerial();
-  void configureSerialPort(){
+  LinuxSerial() :serialFd(0) {}
+  virtual ~LinuxSerial() {}
+  virtual void configure(){
     system("stty -F " SERIAL_DEVICE_PATH " 19200 cs8 -cstopb -parenb");
     serialFd=open(SERIAL_DEVICE_PATH, O_RDWR|O_NONBLOCK);
     if(serialFd<0){
       perror("Failed to open serial device, using stdout");
       serialFd=1;
-  //    exit(0);
+      exit(0);
     }
   }
 
@@ -140,11 +141,11 @@ public:
   }
 #endif
 
-  const std::string readLine(){
+  virtual const std::string readLine(){
     return "";
   }
 
-  void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
+  virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
     write(serialFd, hexLine, hexLineLen);
   }
 
@@ -170,13 +171,15 @@ public:
 
   virtual const std::string readLine(){
     if(responseQueue.empty()){
-      printf("Missing a mock response\n");
+      printf("Missing a mock response. You need to add a mocked response to the MockSerial class.\n");
       exit(1);
     }
     std::string ret=responseQueue.front();
+//    printf("Poped %s\n", ret.c_str());
     responseQueue.pop_front();
     return ret;
   }
+
   virtual void writeHexLine(char* hexLine, uint16_t hexLineLen){
     printf("Mock->writeHexLine(%s,%d)", hexLine, hexLineLen);
   }
