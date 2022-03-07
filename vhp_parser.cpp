@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <memory.h>
@@ -10,6 +11,25 @@
 
 #include "vhp_registers.h"
 #include "vhp_parser.h"
+
+void hexdump(const char* msg, const void *ptr, int buflen) {
+  printf("%s\n", msg);
+  unsigned char *buf = (unsigned char*)ptr;
+  int i, j;
+  for (i=0; i<buflen; i+=16) {
+    printf("%06x: ", i);
+    for (j=0; j<16; j++)
+      if (i+j < buflen)
+        printf("%02x ", buf[i+j]);
+      else
+        printf("   ");
+    printf(" ");
+    for (j=0; j<16; j++)
+      if (i+j < buflen)
+        printf("%c", isprint(buf[i+j]) ? buf[i+j] : '.');
+    printf("\n");
+  }
+}
 
 uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload){
   uint8_t checksum=0x55;
@@ -63,21 +83,34 @@ void parseHistoryTotalRecord(const uint8_t* payloadBytes, uint16_t payloadBytesL
 void parseHistoryDayRecord(const uint8_t* payloadBytes, uint16_t payloadBytesLen, VHParsedSentence* sentence){
   sentence->sentenceType=VHParsedSentence::HISTORY_DAILY_REGISTER;
   sentence->sentence.historyDaily=new HistoryDailyRecord();
-  sentence->sentence.historyDaily->reservedByte=(*((uint32_t*) payloadBytes+0));
-  sentence->sentence.historyDaily->yield=le32toh(*((uint32_t*) payloadBytes+1));
-  sentence->sentence.historyDaily->consumed=le32toh(*((uint32_t*) payloadBytes+5));//consumed by load output
 
-  sentence->sentence.historyDaily->maxBattVoltage=le16toh(*((uint32_t*) payloadBytes+7));
-  sentence->sentence.historyDaily->minBattVoltage=le16toh(*((uint32_t*) payloadBytes+9));
+  sentence->sentence.historyDaily->reservedByte=*payloadBytes;
+  payloadBytes++;
+  sentence->sentence.historyDaily->yield=le32toh(*((uint32_t*) payloadBytes));
+  payloadBytes+=4;
+  sentence->sentence.historyDaily->consumed=le32toh(*((uint32_t*) payloadBytes));//consumed by load output
+  payloadBytes+=4;
 
-  sentence->sentence.historyDaily->timeBulk=le16toh(*((uint32_t*) payloadBytes+11));
-  sentence->sentence.historyDaily->timeAbsorbtion=le16toh(*((uint32_t*) payloadBytes+13));
-  sentence->sentence.historyDaily->timeFloat=le16toh(*((uint32_t*) payloadBytes+15));
+  sentence->sentence.historyDaily->maxBattVoltage=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
+  sentence->sentence.historyDaily->minBattVoltage=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
 
-  sentence->sentence.historyDaily->maxPower=le32toh(*((uint32_t*) payloadBytes+17));
-  sentence->sentence.historyDaily->maxBattCurrent=le16toh(*((uint32_t*) payloadBytes+21));
-  sentence->sentence.historyDaily->maxPanelVoltage=le16toh(*((uint32_t*) payloadBytes+23));
-  sentence->sentence.historyDaily->daySequenceNumber=le16toh(*((uint32_t*) payloadBytes+25));
+  sentence->sentence.historyDaily->timeBulk=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
+  sentence->sentence.historyDaily->timeAbsorbtion=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
+  sentence->sentence.historyDaily->timeFloat=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
+
+  sentence->sentence.historyDaily->maxPower=le32toh(*((uint32_t*) payloadBytes));
+  payloadBytes+=4;
+  sentence->sentence.historyDaily->maxBattCurrent=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
+  sentence->sentence.historyDaily->maxPanelVoltage=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
+  sentence->sentence.historyDaily->daySequenceNumber=le16toh(*((uint16_t*) payloadBytes));
+  payloadBytes+=2;
 }
 
 void parseProductId(const uint8_t* payloadBytes){
@@ -125,7 +158,7 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
   uint16_t registerId=le16toh(*(uint16_t*) (payloadBytes+1));
   const RegisterDesc* registerDesc=lookupRegister(registerId);
   if(registerDesc==NULL){
-    printf("Don't know how to decode register 0x%X\n", registerId);
+    printf("Don't know how to decode register 0x%04X\n", registerId);
     return NULL;
   }
 
@@ -204,13 +237,18 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
 VHParsedSentence* parseAsync(const uint8_t* payloadBytes, const uint16_t payloadBytesLen){
   printf("Parse ASYNC response\n");
   VHParsedSentence* sentence=parseGet(payloadBytes, payloadBytesLen);
-  sentence->isAsync=true;
+  if(sentence){
+    sentence->isAsync=true;
+  }
   return sentence;
 }
 
-void parseDone(const uint8_t* payloadBytes){
+VHParsedSentence* parseDone(const uint8_t* payloadBytes){
   printf("TODO Parse DONE response\n");
   //Parsing DONE messages depends on the last command we sent...
+  VHParsedSentence* sentence=new VHParsedSentence(0);
+  sentence->sentenceType=VHParsedSentence::DONE;
+  return sentence;
 }
 
 VHParsedSentence* parsePong(const uint8_t* payloadBytes){
@@ -227,6 +265,15 @@ VHParsedSentence* parsePong(const uint8_t* payloadBytes){
   return sentence;
 }
 
+VHParsedSentence* parseAppVersion(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
+  printf("Got AppVersion message\n");
+//  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
+  uint16_t appversion=le16toh(*(uint16_t*)(payloadBytes+1));
+  printf("\tFirmware version=0x%04X\n", appversion);
+  VHParsedSentence* sentence=new VHParsedSentence(0);
+  sentence->sentenceType=VHParsedSentence::FIRMWARE_VERSION;
+  return sentence;
+}
 
 VHParsedSentence* parseHexLine(const char* hexLine){
   if(hexLine==NULL) {
@@ -258,32 +305,34 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   }
 
   VHParsedSentence *sentence=NULL;
-  if(HEXCMD_DONE==payloadBytes[0]) {
-    parseDone(payloadBytes);
-  }
-  else if(HEXCMD_APP_VERSION==payloadBytes[0]) {
-    printf("Got AppVersion message\n");
-  }
-  else if(HEXCMD_PRODUCT_ID==payloadBytes[0]) {
-    printf("Got ERROR message\n");
-  }
-  else if(HEXCMD_PING==payloadBytes[0]) {
-    sentence=parsePong(payloadBytes);
-  }
-  else if(HEXCMD_GET==payloadBytes[0]) {
+  if(HEXCMD_GET==payloadBytes[0]) {
     sentence=parseGet(payloadBytes, payloadBytesLen);
-  }
-  else if(HEXCMD_SET==payloadBytes[0]) {
-    printf("Got SET response\n");
   }
   else if(HEXCMD_ASYNC==payloadBytes[0]) {
     sentence=parseAsync(payloadBytes, payloadBytesLen);
   }
+  else if(HEXCMD_DONE==payloadBytes[0]) {
+    sentence=parseDone(payloadBytes);
+  }
+  else if(HEXCMD_APP_VERSION==payloadBytes[0]) {
+    sentence=parseAppVersion(payloadBytes, payloadBytesLen);
+  }
+  else if(HEXCMD_PRODUCT_ID==payloadBytes[0]) {
+    printf("Got HEXCMD_PRODUCT_ID message\n");
+  }
+  else if(HEXCMD_PING==payloadBytes[0]) {
+    sentence=parsePong(payloadBytes);
+  }
+  else if(HEXCMD_SET==payloadBytes[0]) {
+    printf("Got SET response\n");
+    sentence=new VHParsedSentence(0);
+    sentence->sentenceType=VHParsedSentence::SET;
+  }
 
   free(payloadBytes);
-  if(sentence->sentenceType==VHParsedSentence::SentenceType::NONE){
-    printf("Unknown HEX command\n");
-    exit(1);
+  if(sentence==NULL || sentence->sentenceType==VHParsedSentence::SentenceType::NONE){
+    printf("Unknown/Unhandled HEX command %s\n", hexLine);
+//    exit(1);
   }
   return sentence;
 }
@@ -297,19 +346,52 @@ void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* p
 
 void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg){
   if(expected!=actual){
-    printf("%s\n", failureMsg);
+    printf("%s. Was expecting %d but got %d\n", failureMsg, expected, actual);
     exit(0);
   }
 }
 
 void testParser(){
   VHParsedSentence* sentence;
+  sentence=parseHexLine(":A4E030000FA\n");
+  delete sentence;
+
+  sentence=parseHexLine(":305004D\n");
+  delete sentence;
+
   sentence=parseHexLine(":51641F9\n");
   assertEquals(VHParsedSentence::PING, sentence->sentenceType, "Should be ping");
+  delete sentence;
 
   sentence=parseHexLine(":11641FD\n");
+  assertEquals(VHParsedSentence::DONE, sentence->sentenceType, "Should be done");
+  delete sentence;
+
 //  sentence=parseHexLine(":A4F10000100000000006E5A00006E5A00008E12F9051E9604FFFFFFFFFFFFFFFFFFFFFFFFFF12\n");
   sentence=parseHexLine(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n");
+  assertEquals(VHParsedSentence::HISTORY_DAILY_REGISTER, sentence->sentenceType, "HISTORY_DAILY_REGISTER");
+  assertEquals(0x1050, sentence->registerId, "Daily history");
+  assertEquals(127, sentence->sentence.historyDaily->yield, "yield");
+  assertEquals(0xFFFFFFFF, sentence->sentence.historyDaily->consumed, "consumed");
+  assertEquals(1430, sentence->sentence.historyDaily->maxBattVoltage, "maxBattVoltage");
+  assertEquals(1247, sentence->sentence.historyDaily->minBattVoltage, "minBattVoltage");
+
+  assertEquals(0, sentence->sentence.historyDaily->error0, "error0");
+  assertEquals(0, sentence->sentence.historyDaily->error1, "error1");
+  assertEquals(0, sentence->sentence.historyDaily->error2, "error2");
+  assertEquals(0, sentence->sentence.historyDaily->error3, "error3");
+
+  assertEquals(0, sentence->sentence.historyDaily->timeBulk, "timeBulk");
+  assertEquals(0, sentence->sentence.historyDaily->timeAbsorbtion, "timeAbsorbtion");
+  assertEquals(41728, sentence->sentence.historyDaily->timeFloat, "timeFloat");
+
+  assertEquals(1, sentence->sentence.historyDaily->maxPower, "maxPower");
+
+  assertEquals(0, sentence->sentence.historyDaily->daySequenceNumber, "daySequenceNumber");
+  assertEquals(60561, sentence->sentence.historyDaily->maxBattCurrent, "maxBattCurrent");
+
+  delete sentence;
+
   sentence=parseHexLine(":A4F10000100000000005655010056550100EB36FC051E7500FFFFFFFFFFFFFFFFFFFFFFFFFFEB\n");
   sentence=parseHexLine(":A0102000543\n");
   sentence=parseHexLine(":8F0ED0064000C\n");

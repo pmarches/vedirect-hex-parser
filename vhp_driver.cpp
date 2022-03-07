@@ -1,6 +1,9 @@
+#include <memory.h>
+
 #include <deque>
 #include <string>
-#include <memory.h>
+#include <sstream>
+#include <iostream>
 
 #include "vhp_parser.h"
 
@@ -9,6 +12,7 @@
 
 class VHPSerial {
 public:
+  virtual ~VHPSerial() {}
   virtual void configure()=0;
   virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen)=0;
   virtual const std::string readLine()=0;
@@ -42,7 +46,7 @@ class VHPDriver {
   void onNonHexSentenceReceived(const char* nonHexSentence);
 public:
   VHPSerial* serial;
-  VHPDriver(VHPSerial* serial) : serial(serial) {
+  VHPDriver(VHPSerial* serial) : serial(serial), onAsyncHandler(nullptr) {
   }
   void registerHandler();
   void sendPing() {
@@ -78,7 +82,7 @@ public:
   VHParsedSentence* readSentence(){
     std::string hexLine=serial->readLine();
     VHParsedSentence* sentence=parseHexLine(hexLine.c_str());
-    if(sentence->isAsync){
+    if(sentence && sentence->isAsync){
       this->onAsyncHandler(sentence);
     }
     return sentence;
@@ -141,11 +145,10 @@ public:
   }
 
   int serialFd;
-#if 0
-  int readBufferLen=0;
-  char readBuffer[256];
 
-  size_t readLine(){
+  virtual const std::string readLine(){
+    int readBufferLen=0;
+    char readBuffer[256];
     memset(readBuffer, 0, sizeof(readBuffer));
     while(true){
       int nbBytesRead=read(serialFd, readBuffer, sizeof(readBuffer)-1);
@@ -154,18 +157,13 @@ public:
       }
       readBuffer[nbBytesRead]=0;
       if(readBuffer[0]==':' && readBuffer[nbBytesRead-1]=='\n'){
-        //      printf("Read %d bytes, %.*s", nbBytesRead, nbBytesRead, readBuffer);
-        return nbBytesRead;
+        printf("Read %d bytes, %.*s", nbBytesRead, nbBytesRead, readBuffer);
+        return std::string(readBuffer, nbBytesRead);
       }
       else{
         printf("Read some bytes that are not HEX lines, ignoring this: %.*s\n", nbBytesRead, readBuffer);
       }
     }
-  }
-#endif
-
-  virtual const std::string readLine(){
-    return "";
   }
 
   virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){

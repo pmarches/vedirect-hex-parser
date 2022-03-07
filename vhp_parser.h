@@ -85,6 +85,9 @@ public:
   enum SentenceType {
     NONE,
     PING,
+    FIRMWARE_VERSION,
+    DONE,
+    SET,
     SIGNED_REGISTER,
     UNSIGNED_REGISTER,
     HISTORY_TOTAL_REGISTER,
@@ -104,30 +107,6 @@ public:
         sentenceType==HISTORY_TOTAL_REGISTER ||
         sentenceType==HISTORY_DAILY_REGISTER;
   }
-
-  void printHistoryDaily(VHParsedSentence* sentence){
-    printf("\tyield=%f\n", sentence->sentence.historyDaily->yield*0.01);
-    if(sentence->sentence.historyDaily->consumed!=0xFFFFFFFF) printf("\tconsumed=%f\n", sentence->sentence.historyDaily->consumed*0.01);
-    printf("\tmaxBattVoltage=%f\n", sentence->sentence.historyDaily->maxBattVoltage*0.01);
-    printf("\tminBattVoltage=%f\n", sentence->sentence.historyDaily->minBattVoltage*0.01);
-    printf("\ttimeBulk=%d\n", sentence->sentence.historyDaily->timeBulk);
-    printf("\ttimeAbsorbtion=%d\n", sentence->sentence.historyDaily->timeAbsorbtion);
-    printf("\ttimeFloat=%d\n", sentence->sentence.historyDaily->timeFloat);
-    printf("\tmaxPower=%d\n", sentence->sentence.historyDaily->maxPower);
-    printf("\tmaxBattCurrent=%f\n", sentence->sentence.historyDaily->maxBattCurrent*0.1);
-    printf("\tmaxPanelVoltage=%f\n", sentence->sentence.historyDaily->maxPanelVoltage*0.01);
-    printf("\tdaySequenceNumber=%d\n", sentence->sentence.historyDaily->daySequenceNumber);
-  }
-
-  #if 0
-  toString() {
-    printf("\ttypeAndVersion=0x%02X\n", sentence->sentence.pingResponse->typeAndVersion);
-    printf("\tappType=%d\n", sentence->sentence.pingResponse->appType);
-    printf("\tbooloader RC=%d \n", sentence->sentence.pingResponse->rcVersion);
-    printf("\tversion=%02X\n", sentence->sentence.pingResponse->typeAndVersion&0b0011111111111111);
-  }
-  #endif
-
 };
 
 
