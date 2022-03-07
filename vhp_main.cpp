@@ -29,35 +29,30 @@ void printRegister(uint16_t registerId, uint32_t registerValue){
   }
 }
 
-#if 0
-toString() {
-  printf("\ttypeAndVersion=0x%02X\n", sentence->sentence.pingResponse->typeAndVersion);
-  printf("\tappType=%d\n", sentence->sentence.pingResponse->appType);
-  printf("\tbooloader RC=%d \n", sentence->sentence.pingResponse->rcVersion);
-  printf("\tversion=%02X\n", sentence->sentence.pingResponse->typeAndVersion&0b0011111111111111);
+void onAsyncSentenceReceived(VHParsedSentence* asyncSentence){
+  printf("Async sentence received..\n");
 }
-#endif
 
 int main(int argc, char **argv) {
-#if 1
+#if 0
   LinuxSerial serial;
   serial.configure();
-#elif 0
+#elif 1
 //  testParser();
 
   MockSerial serial;
   VHPDriver vhpDriver(&serial);
+  vhpDriver.registerAsyncSentenceHandler(onAsyncSentenceReceived);
   serial.queueResponse(":7F0ED009600DB\n");
-  serial.queueResponse(":A0102000543\n");
+  serial.queueResponse(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n");
 //  serial.queueResponse(NON_HEX_PAYLOAD);
   vhpDriver.getRegisterValueSigned(0xEDF0);
   serial.queueResponse(":51641F9\n");
   vhpDriver.sendPing();
 
-  VHParsedSentence sentence;
   serial.queueResponse(":7F0ED009600DB\n");
-  vhpDriver.getRegisterValue(0xEDF0, &sentence);
-  printRegister(sentence.sentence.getRegisterResponse->registerId, sentence.sentence.getRegisterResponse->registerValueSigned);
+  VHParsedSentence* sentence=vhpDriver.getRegisterValue(0xEDF0);
+  printRegister(sentence->registerId, sentence->sentence.signedRegister->registerValueSigned);
 
 #else
   MultiplexedSerial multiSerial(gpioBit0,gpioBit1,gpioBit2,gpioEnable);

@@ -46,60 +46,83 @@ public:
   }
   void registerHandler();
   void sendPing() {
-    printf("Ping ANSWER: :51641F9\n");
     uint8_t pingCommandBytes[]={0x01};
     serial->sendPayload(pingCommandBytes, 1);
 
-    VHParsedSentence sentence;
-    getSentenceOfType(VHParsedSentence::SentenceType::PING, &sentence);
-//    sentence.PingResponse;
+    while(true){
+      VHParsedSentence* sentence=readSentence();
+      if(sentence->sentenceType==VHParsedSentence::PING){
+        delete sentence;
+        return;
+      }
+      else{
+        printf("Ignoring parsed sentence because we are looking for a PONG\n");
+        delete sentence;
+      }
+    }
+
   }
 
   void requestModelName(){
     printf("ANSWER: :70A010061626364B9\n");
-    VHParsedSentence sentence;
-    getRegisterValue(0x010A, &sentence);
+    VHParsedSentence* sentence=getRegisterValue(0x010A);
+    delete sentence;
   }
 
   void requestProductId(){
     printf("ANSWER: :700010048A065\n");
-    VHParsedSentence sentence;
-    getRegisterValue(0x0100, &sentence);
+    VHParsedSentence* sentence=getRegisterValue(0x0100);
+    delete sentence;
+  }
+
+  VHParsedSentence* readSentence(){
+    std::string hexLine=serial->readLine();
+    VHParsedSentence* sentence=parseHexLine(hexLine.c_str());
+    if(sentence->isAsync){
+      this->onAsyncHandler(sentence);
+    }
+    return sentence;
   }
 
   /***
-   * This will ignore sentences of other types.
+   * This will ignore sentences of other registers
    */
-  void getSentenceOfType(VHParsedSentence::SentenceType typeWanted, VHParsedSentence* sentence){
+  VHParsedSentence* getSentenceForRegister(uint16_t registerIdWanted){
     while(true){
-      std::string hexLine=serial->readLine();
-      parseHexLine(hexLine.c_str(), sentence);
-      if(sentence->sentenceType==typeWanted){
-        return;
+      VHParsedSentence* sentence=readSentence();
+      if(sentence->isRegister() && sentence->registerId==registerIdWanted){
+        return sentence;
       }
       else{
-        printf("Ignoring hexline %s\n", hexLine.c_str());
+        printf("Ignoring parsed sentence\n");
+        delete sentence;
       }
     }
   }
 
-  void getRegisterValue(uint16_t registerToGet, VHParsedSentence* sentence){
+  VHParsedSentence* getRegisterValue(uint16_t registerToGet){
     uint8_t payloadBytes[4];
     uint8_t nbPayloadBytes;
     VHPBuildGetRegisterPayload(registerToGet, 0, payloadBytes);
     serial->sendPayload(payloadBytes, sizeof(payloadBytes));
 
-    getSentenceOfType(VHParsedSentence::SentenceType::GET_REGISTER, sentence);
+    return getSentenceForRegister(registerToGet);
   }
 
   int32_t getRegisterValueSigned(uint16_t registerToGet){
-    VHParsedSentence sentence;
-    getRegisterValue(registerToGet, &sentence);
-    int32_t ret=sentence.sentence.getRegisterResponse->registerValueSigned;
+    VHParsedSentence* sentence=getRegisterValue(registerToGet);
+    int32_t ret=sentence->sentence.signedRegister->registerValueSigned;
+    delete sentence;
     return ret;
   }
 
   std::string getModelName(); //Synchronous
+
+  void (*onAsyncHandler)(VHParsedSentence*);
+  void registerAsyncSentenceHandler(void (*onAsyncHandler)(VHParsedSentence*)){
+    this->onAsyncHandler=onAsyncHandler;
+  }
+
 };
 
 
@@ -148,7 +171,6 @@ public:
   virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
     write(serialFd, hexLine, hexLineLen);
   }
-
 };
 
 
@@ -180,7 +202,7 @@ public:
     return ret;
   }
 
-  virtual void writeHexLine(char* hexLine, uint16_t hexLineLen){
+  virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
     printf("Mock->writeHexLine(%s,%d)", hexLine, hexLineLen);
   }
 };

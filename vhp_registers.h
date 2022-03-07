@@ -6,7 +6,7 @@
 enum REGISTER_ENCODING {
   UNSIGNED,
   SIGNED,
-  CHAR,
+  BYTES,
 };
 
 typedef struct {
