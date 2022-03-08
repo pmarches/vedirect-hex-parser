@@ -141,7 +141,7 @@ public:
   VHParsedSentence* readSentence(){
     std::string hexLine=serial->readLine();
     VHParsedSentence* sentence=parseHexLine(hexLine.c_str());
-    if(sentence && sentence->isAsync){
+    if(this->onAsyncHandler && sentence && sentence->isAsync){
       this->onAsyncHandler(sentence);
     }
     return sentence;

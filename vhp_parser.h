@@ -56,9 +56,6 @@ typedef struct {
 } HistoryDailyRecord;
 
 typedef struct {
-} ParsedSentenceModelName;
-
-typedef struct {
   uint16_t typeAndVersion;
   uint8_t appType;
   uint8_t rcVersion;
@@ -88,34 +85,9 @@ public:
     std::string* stringValue;
   } sentence;
 
-  VHParsedSentence(uint16_t registerId) : registerId(registerId), type(NONE), isAsync(false){
-  }
-
-  ~VHParsedSentence(){
-    if(type==SIGNED_REGISTER){
-      delete sentence.signedRegister;
-    }
-    else if(type==UNSIGNED_REGISTER){
-      delete sentence.unsignedRegister;
-    }
-    else if(type==STRING){
-      delete sentence.stringValue;
-    }
-    else if(type==HISTORY_DAILY_REGISTER){
-      delete sentence.historyDaily;
-    }
-    else if(type==HISTORY_TOTAL_REGISTER){
-      delete sentence.historyTotal;
-    }
-  }
-
-  bool isRegister(){
-    return type==SIGNED_REGISTER ||
-        type==UNSIGNED_REGISTER ||
-        type==HISTORY_TOTAL_REGISTER ||
-        type==HISTORY_DAILY_REGISTER ||
-        type==STRING;
-  }
+  VHParsedSentence(uint16_t registerId);
+  ~VHParsedSentence();
+  bool isRegister() const;
 };
 
 

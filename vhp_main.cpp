@@ -93,7 +93,7 @@ toString() {
 
 void toPrint(VHParsedSentence* sentence){
   if(sentence==NULL){
-    std::cout<<"Nothing to print, senten is NULL\n";
+    std::cout<<"Nothing to print, sentence is NULL\n";
     return;
   }
   std::stringstream ss;
