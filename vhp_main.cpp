@@ -34,12 +34,12 @@ void printRegister(uint16_t registerId, uint32_t registerValue){
 
 void printSignedRegister(VHParsedSentence* sentence, std::stringstream& ss){
   ss<<"\t"<<"registerId="<<sentence->registerId<<std::endl;
-  ss<<"\t"<<"registerValueSigned="<<sentence->sentence.signedRegister->registerValueSigned<<std::endl;
+  ss<<"\t"<<"registerValueSigned="<<sentence->sentence.signedRegister->value<<std::endl;
 }
 
 void printUnsignedRegister(VHParsedSentence* sentence, std::stringstream& ss){
   ss<<"\t"<<"registerId="<<sentence->registerId<<std::endl;
-  ss<<"\t"<<"registerValueUnsigned="<<sentence->sentence.unSignedRegister->registerValueUnsigned<<std::endl;
+  ss<<"\t"<<"registerValueUnsigned="<<sentence->sentence.unsignedRegister->value<<std::endl;
 
   const RegisterDesc* registerDesc=lookupRegister(sentence->registerId);
   if(NULL==registerDesc){
@@ -48,13 +48,13 @@ void printUnsignedRegister(VHParsedSentence* sentence, std::stringstream& ss){
   }
   printf("\tRegister for '%s'\n", registerDesc->desc);
   if(registerDesc->byteLen==1){
-    printf("\tSimple byte value %0.2f%s\n", sentence->sentence.unSignedRegister->registerValueUnsigned*registerDesc->scale, registerDesc->unit);
+    printf("\tSimple byte value %0.2f%s\n", sentence->sentence.unsignedRegister->value*registerDesc->scale, registerDesc->unit);
   }
   else if(registerDesc->byteLen==2){
-    printf("\tShort value %0.2f%s\n", sentence->sentence.unSignedRegister->registerValueUnsigned*registerDesc->scale, registerDesc->unit);
+    printf("\tShort value %0.2f%s\n", sentence->sentence.unsignedRegister->value*registerDesc->scale, registerDesc->unit);
   }
   else if(registerDesc->byteLen==4){
-    printf("\tInt value %0.2f%s\n", sentence->sentence.unSignedRegister->registerValueUnsigned*registerDesc->scale, registerDesc->unit);
+    printf("\tInt value %0.2f%s\n", sentence->sentence.unsignedRegister->value*registerDesc->scale, registerDesc->unit);
   }
 }
 
@@ -97,18 +97,18 @@ void toPrint(VHParsedSentence* sentence){
     return;
   }
   std::stringstream ss;
-  ss<<"\t"<<"sentenceType="<<sentence->sentenceType<<std::endl;
+  ss<<"\t"<<"sentenceType="<<sentence->type<<std::endl;
   ss<<"\t"<<"isAsync="<<sentence->isAsync<<std::endl;
-  if(sentence->sentenceType==VHParsedSentence::SIGNED_REGISTER){
+  if(sentence->type==VHParsedSentence::SIGNED_REGISTER){
     printSignedRegister(sentence, ss);
   }
-  else if(sentence->sentenceType==VHParsedSentence::UNSIGNED_REGISTER){
+  else if(sentence->type==VHParsedSentence::UNSIGNED_REGISTER){
     printUnsignedRegister(sentence, ss);
   }
-  else if(sentence->sentenceType==VHParsedSentence::HISTORY_DAILY_REGISTER){
+  else if(sentence->type==VHParsedSentence::HISTORY_DAILY_REGISTER){
     printHistoryDaily(sentence, ss);
   }
-  else if(sentence->sentenceType==VHParsedSentence::HISTORY_TOTAL_REGISTER){
+  else if(sentence->type==VHParsedSentence::HISTORY_TOTAL_REGISTER){
     printHistoryTotal(sentence, ss);
   }
   std::cout<<ss.str();
@@ -124,14 +124,19 @@ int main(int argc, char **argv) {
   serial.configure();
   VHPDriver vhpDriver(&serial);
   vhpDriver.registerAsyncSentenceHandler(onAsyncSentenceReceived);
-  vhpDriver.sendPing();
-  while(true){
-    VHParsedSentence* sentence=vhpDriver.readSentence();
-    if(sentence){
-      toPrint(sentence);
-      delete sentence;
-    }
-  }
+  vhpDriver.sendPingWaitPong();
+  vhpDriver.getProductId();
+  vhpDriver.getGroupId();
+  vhpDriver.getSerialNumber();
+  vhpDriver.getModelName();
+  vhpDriver.getCapabilities();
+//  while(true){
+//    VHParsedSentence* sentence=vhpDriver.readSentence();
+//    if(sentence){
+//      toPrint(sentence);
+//      delete sentence;
+//    }
+//  }
 
 #elif 1
   testParser();
@@ -150,11 +155,11 @@ int main(int argc, char **argv) {
 //  serial.queueResponse(NON_HEX_PAYLOAD);
   vhpDriver.getRegisterValueSigned(0xEDF0);
   serial.queueResponse(":51641F9\n");
-  vhpDriver.sendPing();
+  vhpDriver.sendPingWaitPong();
 
   serial.queueResponse(":7F0ED009600DB\n");
   sentence=vhpDriver.getRegisterValue(0xEDF0);
-  printRegister(sentence->registerId, sentence->sentence.signedRegister->registerValueSigned);
+  printRegister(sentence->registerId, sentence->sentence.signedRegister->value);
 
 #else
   MultiplexedSerial multiSerial(gpioBit0,gpioBit1,gpioBit2,gpioEnable);

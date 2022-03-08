@@ -6,6 +6,7 @@
 #include <iostream>
 
 #include "vhp_parser.h"
+#include "vhp_registers.h"
 
 #define SERIAL_DEVICE_PATH "/dev/ttyUSB0"
 
@@ -38,8 +39,6 @@ public:
   }
 };
 
-void onVHSentenceReceived(); //User implements this signature as callback?
-
 class VHPDriver {
   const static size_t READ_BUFFER_SIZE=256;
 //  void onRegisterValueReceived(uint16_t registerId, uint32_t registerValue); //byte,short values are also encoded in this 32bit int.
@@ -48,34 +47,94 @@ public:
   VHPSerial* serial;
   VHPDriver(VHPSerial* serial) : serial(serial), onAsyncHandler(nullptr) {
   }
-  void registerHandler();
-  void sendPing() {
-    uint8_t pingCommandBytes[]={0x01};
-    serial->sendPayload(pingCommandBytes, 1);
 
-    while(true){
+  VHParsedSentence* discardSentencesUntilType(VHParsedSentence::SentenceType typeLookedFor){
+    for(int i=0; i<20; i++){
       VHParsedSentence* sentence=readSentence();
-      if(sentence->sentenceType==VHParsedSentence::PING){
-        delete sentence;
-        return;
+      if(sentence==NULL){
+        continue;
+      }
+
+      if(sentence->type==typeLookedFor){
+        return sentence;
       }
       else{
-        printf("Ignoring parsed sentence because we are looking for a PONG\n");
+        printf("Ignoring parsed sentence because we are looking for %d\n", typeLookedFor);
         delete sentence;
       }
     }
-
+    return NULL;
   }
 
-  void requestModelName(){
-    printf("ANSWER: :70A010061626364B9\n");
+  /***
+   * This will ignore sentences of other registers
+   */
+  VHParsedSentence* discardSentencesUntilRegister(uint16_t registerIdWanted){
+    for(int i=0; i<20; i++){
+      VHParsedSentence* sentence=readSentence();
+      if(sentence==NULL){
+        continue;
+      }
+
+      if(sentence->isRegister()){
+        if(sentence->registerId==registerIdWanted){
+          return sentence;
+        }
+        else{
+          printf("Ignoring parsed sentence because we are looking for register 0x%04X. This one was 0x%04X\n", registerIdWanted, sentence->registerId);
+          delete sentence;
+        }
+      }
+      else{
+        printf("Ignoring parsed sentence because we are looking for a register sentence. This one was a %d\n", sentence->type);
+        delete sentence;
+      }
+    }
+    //
+    return NULL;
+  }
+
+  void sendPingWaitPong() {
+    //:154
+    uint8_t pingCommandBytes[]={0x01};
+    serial->sendPayload(pingCommandBytes, 1);
+    VHParsedSentence *sentence=discardSentencesUntilType(VHParsedSentence::PONG);
+    delete sentence;
+  }
+
+  const ProductDescription* getProductId(){
+    VHParsedSentence* sentence=getRegisterValue(0x0100);
+
+    uint16_t productId=sentence->sentence.unsignedRegister->value;
+    printf("\tproductId=0x%X\n", productId);
+    const ProductDescription* productDesc=lookupProductId(productId);
+    if(productDesc==NULL){
+      printf("Product id not found\n");
+      return NULL;
+    }
+    printf("\tProduct name is %s\n", productDesc->productName);
+
+    delete sentence;
+    return productDesc;
+  }
+
+  void getGroupId(){
+    VHParsedSentence* sentence=getRegisterValue(0x0104);
+    delete sentence;
+  }
+
+  void getSerialNumber(){
     VHParsedSentence* sentence=getRegisterValue(0x010A);
     delete sentence;
   }
 
-  void requestProductId(){
-    printf("ANSWER: :700010048A065\n");
-    VHParsedSentence* sentence=getRegisterValue(0x0100);
+  void getModelName(){
+    VHParsedSentence* sentence=getRegisterValue(0x010B);
+    delete sentence;
+  }
+
+  void getCapabilities(){
+    VHParsedSentence* sentence=getRegisterValue(0x0140);
     delete sentence;
   }
 
@@ -88,39 +147,28 @@ public:
     return sentence;
   }
 
-  /***
-   * This will ignore sentences of other registers
-   */
-  VHParsedSentence* getSentenceForRegister(uint16_t registerIdWanted){
-    while(true){
-      VHParsedSentence* sentence=readSentence();
-      if(sentence->isRegister() && sentence->registerId==registerIdWanted){
-        return sentence;
-      }
-      else{
-        printf("Ignoring parsed sentence\n");
-        delete sentence;
-      }
-    }
-  }
 
   VHParsedSentence* getRegisterValue(uint16_t registerToGet){
     uint8_t payloadBytes[4];
     uint8_t nbPayloadBytes;
     VHPBuildGetRegisterPayload(registerToGet, 0, payloadBytes);
-    serial->sendPayload(payloadBytes, sizeof(payloadBytes));
 
-    return getSentenceForRegister(registerToGet);
+    while(true){
+      serial->sendPayload(payloadBytes, sizeof(payloadBytes));
+      VHParsedSentence* sentence=discardSentencesUntilRegister(registerToGet);
+      if(sentence!=NULL){
+        return sentence;
+      }
+      printf("Our command seems to have been ignored, or we missed the response. Retrying...\n");
+    }
   }
 
   int32_t getRegisterValueSigned(uint16_t registerToGet){
     VHParsedSentence* sentence=getRegisterValue(registerToGet);
-    int32_t ret=sentence->sentence.signedRegister->registerValueSigned;
+    int32_t ret=sentence->sentence.signedRegister->value;
     delete sentence;
     return ret;
   }
-
-  std::string getModelName(); //Synchronous
 
   void (*onAsyncHandler)(VHParsedSentence*);
   void registerAsyncSentenceHandler(void (*onAsyncHandler)(VHParsedSentence*)){
@@ -136,7 +184,7 @@ public:
   virtual ~LinuxSerial() {}
   virtual void configure(){
     system("stty -F " SERIAL_DEVICE_PATH " 19200 cs8 -cstopb -parenb");
-    serialFd=open(SERIAL_DEVICE_PATH, O_RDWR|O_NONBLOCK);
+    serialFd=open(SERIAL_DEVICE_PATH, O_RDWR);
     if(serialFd<0){
       perror("Failed to open serial device, using stdout");
       serialFd=1;
@@ -147,26 +195,24 @@ public:
   int serialFd;
 
   virtual const std::string readLine(){
-    int readBufferLen=0;
     char readBuffer[256];
-    memset(readBuffer, 0, sizeof(readBuffer));
+    int nbBytesRead=0;
     while(true){
-      int nbBytesRead=read(serialFd, readBuffer, sizeof(readBuffer)-1);
-      if(nbBytesRead<0){
-        continue;
+      if(read(serialFd, readBuffer+nbBytesRead, 1)<=0){
+        perror("Error reading from linux serial");
+        exit(1);
       }
-      readBuffer[nbBytesRead]=0;
-      if(readBuffer[0]==':' && readBuffer[nbBytesRead-1]=='\n'){
-        printf("Read %d bytes, %.*s", nbBytesRead, nbBytesRead, readBuffer);
-        return std::string(readBuffer, nbBytesRead);
+      if('\n'==readBuffer[nbBytesRead]){
+        return std::string(readBuffer, nbBytesRead+1);
       }
-      else{
-        printf("Read some bytes that are not HEX lines, ignoring this: %.*s\n", nbBytesRead, readBuffer);
+      if(nbBytesRead<sizeof(readBuffer)-1){ //Overflow will overwrite the last char until we reach a newline.
+        nbBytesRead++;
       }
     }
   }
 
   virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
+    printf("writeHexLine: hexLine=>'%.*s'\n", hexLineLen, hexLine);
     write(serialFd, hexLine, hexLineLen);
   }
 };

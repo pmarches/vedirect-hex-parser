@@ -14,11 +14,11 @@ enum VEDIRECT_HEX_COMMAND {
 };
 
 typedef struct {
-  uint32_t registerValueUnsigned;
+  uint32_t value;
 } UnSignedRegister;
 
 typedef struct {
-  int32_t registerValueSigned;
+  int32_t value;
 } SignedRegister;
 
 typedef struct {
@@ -64,48 +64,57 @@ typedef struct {
   uint8_t rcVersion;
 } ParsedSentencePingResponse;
 
-typedef struct {
-} ParsedSentenceAppVersion;
-
-typedef struct {
-} ParsedSentenceProductId;
-
 class VHParsedSentence {
 public:
-  VHParsedSentence(uint16_t registerId) : registerId(registerId), sentenceType(NONE), isAsync(false){
-  }
-
-  ~VHParsedSentence(){
-    if(sentenceType==SIGNED_REGISTER){
-      delete sentence.signedRegister;
-    }
-  }
   uint16_t registerId;
   bool isAsync;
   enum SentenceType {
     NONE,
-    PING,
+    PONG,
     FIRMWARE_VERSION,
     DONE,
-    SET,
+    STRING,
     SIGNED_REGISTER,
     UNSIGNED_REGISTER,
     HISTORY_TOTAL_REGISTER,
     HISTORY_DAILY_REGISTER,
-  } sentenceType;
+  } type;
   union {
     SignedRegister* signedRegister;
-    UnSignedRegister* unSignedRegister;
+    UnSignedRegister* unsignedRegister;
     ParsedSentencePingResponse* pingResponse;
     HistoryTotalRecord* historyTotal;
     HistoryDailyRecord* historyDaily;
+    std::string* stringValue;
   } sentence;
 
+  VHParsedSentence(uint16_t registerId) : registerId(registerId), type(NONE), isAsync(false){
+  }
+
+  ~VHParsedSentence(){
+    if(type==SIGNED_REGISTER){
+      delete sentence.signedRegister;
+    }
+    else if(type==UNSIGNED_REGISTER){
+      delete sentence.unsignedRegister;
+    }
+    else if(type==STRING){
+      delete sentence.stringValue;
+    }
+    else if(type==HISTORY_DAILY_REGISTER){
+      delete sentence.historyDaily;
+    }
+    else if(type==HISTORY_TOTAL_REGISTER){
+      delete sentence.historyTotal;
+    }
+  }
+
   bool isRegister(){
-    return sentenceType==SIGNED_REGISTER ||
-        sentenceType==UNSIGNED_REGISTER ||
-        sentenceType==HISTORY_TOTAL_REGISTER ||
-        sentenceType==HISTORY_DAILY_REGISTER;
+    return type==SIGNED_REGISTER ||
+        type==UNSIGNED_REGISTER ||
+        type==HISTORY_TOTAL_REGISTER ||
+        type==HISTORY_DAILY_REGISTER ||
+        type==STRING;
   }
 };
 
@@ -116,5 +125,6 @@ VHParsedSentence* parseHexLine(const char* hexLine);
 uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload);
 void byteToHex(uint8_t byte, char* hexStr);
 void bytesToHex(const uint8_t* bytes, const uint16_t nbBytes, char* hexOut);
+void hexdump(const char* msg, const void *ptr, int buflen);
 
 #endif /* VHP_PARSER_H_ */

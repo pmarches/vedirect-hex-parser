@@ -9,11 +9,13 @@
 #include <memory.h>
 #include <arpa/inet.h>
 
+#include <string>
+
 #include "vhp_registers.h"
 #include "vhp_parser.h"
 
 void hexdump(const char* msg, const void *ptr, int buflen) {
-  printf("%s\n", msg);
+  printf("%s len=%d\n", msg, buflen);
   unsigned char *buf = (unsigned char*)ptr;
   int i, j;
   for (i=0; i<buflen; i+=16) {
@@ -68,8 +70,20 @@ void hexToBytes(const char* hexLine, uint16_t hexLineLen, uint8_t* outputBytes){
   }
 }
 
+void parseProductId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
+  printf("\tparseProductId\n");
+//  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
+
+  sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
+  sentence->sentence.unsignedRegister=new UnSignedRegister();
+  payloadBytes++; //Instance
+  sentence->sentence.unsignedRegister->value=*((uint16_t*)payloadBytes);
+  payloadBytes+=2; //ProductId
+  payloadBytes++; //Reserved
+}
+
 void parseHistoryTotalRecord(const uint8_t* payloadBytes, uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  sentence->sentenceType=VHParsedSentence::HISTORY_TOTAL_REGISTER;
+  sentence->type=VHParsedSentence::HISTORY_TOTAL_REGISTER;
   sentence->sentence.historyTotal=new HistoryTotalRecord();
 
   sentence->sentence.historyTotal->totalYieldUser=le32toh(*((uint32_t*) payloadBytes));
@@ -81,7 +95,7 @@ void parseHistoryTotalRecord(const uint8_t* payloadBytes, uint16_t payloadBytesL
 }
 
 void parseHistoryDayRecord(const uint8_t* payloadBytes, uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  sentence->sentenceType=VHParsedSentence::HISTORY_DAILY_REGISTER;
+  sentence->type=VHParsedSentence::HISTORY_DAILY_REGISTER;
   sentence->sentence.historyDaily=new HistoryDailyRecord();
 
   sentence->sentence.historyDaily->reservedByte=*payloadBytes;
@@ -113,40 +127,39 @@ void parseHistoryDayRecord(const uint8_t* payloadBytes, uint16_t payloadBytesLen
   payloadBytes+=2;
 }
 
-void parseProductId(const uint8_t* payloadBytes){
-  printf("\tparseProductId\n");
-  uint16_t productId=le16toh(*(uint16_t*) payloadBytes);
-  printf("\tproductId=0x%X\n",productId);
-  const ProductDescription* productDesc=lookupProductId(productId);
-  if(productDesc==NULL){
-    printf("Product id not found\n");
-    return;
-  }
-  printf("\tProduct name is %s\n", productDesc->productName);
-}
-
-void parseGroupId(const uint8_t* payloadBytes){
+void parseGroupId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
   printf("\tparseGroupId\n");
   printf("\tgroupId=%d\n", *payloadBytes);
+
+  sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
+  sentence->sentence.unsignedRegister=new UnSignedRegister();
+  sentence->sentence.unsignedRegister->value=*payloadBytes;
 }
 
-void parseSerialNumber(const uint8_t* payloadBytes){
+void parseSerialNumber(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
   printf("\tparseSerialNumber\n");
-  char* serialNumber=(char*)payloadBytes;
-  int serialNumberLen=4;
-  printf("\tserialNumber=%.*s\n", serialNumberLen, serialNumber);
+  printf("\tserialNumber='%.*s'\n", payloadBytesLen, (char*) payloadBytes);
+//  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
+
+  sentence->type=VHParsedSentence::STRING;
+  sentence->sentence.stringValue=new std::string((const char*) payloadBytes, payloadBytesLen);
 }
 
-void parseModelName(const uint8_t* payloadBytes){
+void parseModelName(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
   printf("\tparseModelName\n");
-  char* modelName=(char*) payloadBytes;
-  printf("\tmodelName=%s\n", modelName);
+  printf("\tmodelName=%.*s\n", payloadBytesLen, (char*) payloadBytes);
+  sentence->type=VHParsedSentence::STRING;
+  sentence->sentence.stringValue=new std::string((const char*) payloadBytes, payloadBytesLen);
+
 }
 
-void parseCapabilities(const uint8_t* payloadBytes){
-  uint32_t capabilities=le32toh(*(uint32_t*)payloadBytes);
+void parseCapabilities(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
   printf("\tparseCapabilities\n");
-  printf("\tcapabilities=0x%X\n", capabilities);
+  sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
+  sentence->sentence.unsignedRegister=new UnSignedRegister();
+  sentence->sentence.unsignedRegister->value=le32toh(*(uint32_t*)payloadBytes);
+
+  printf("\tcapabilities=0x%X\n", sentence->sentence.unsignedRegister->value);
 }
 
 VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
@@ -155,77 +168,82 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
     printf("Got a GET response but the payload length is wrong. %d bytes\n", payloadBytesLen);
     return NULL;
   }
-  uint16_t registerId=le16toh(*(uint16_t*) (payloadBytes+1));
+  payloadBytes+=1; //Skip command
+
+  uint16_t registerId=le16toh(*(uint16_t*) payloadBytes);
+  payloadBytes+=2;
   const RegisterDesc* registerDesc=lookupRegister(registerId);
   if(registerDesc==NULL){
     printf("Don't know how to decode register 0x%04X\n", registerId);
     return NULL;
   }
 
-  uint8_t flag=*(payloadBytes+3);
+  uint8_t flag=*payloadBytes;
+  payloadBytes+=1;
   printf("registerId=0x%04X flag=%d\n", registerId, flag);
   if(flag!=0){
     printf("Something is wrong with that flag");
     return NULL;
   }
+  payloadBytesLen-=4;
 
   VHParsedSentence* sentence=new VHParsedSentence(registerId);
-  if(registerDesc->byteLen==1 && registerDesc->encoding==SIGNED){
-    sentence->sentenceType=VHParsedSentence::SIGNED_REGISTER;
-    sentence->sentence.signedRegister=new SignedRegister();
-    sentence->registerId=registerId;
-    sentence->sentence.signedRegister->registerValueSigned=*(payloadBytes+4);
-  }
-  else if(registerDesc->byteLen==1 && registerDesc->encoding==UNSIGNED){
-    sentence->sentenceType=VHParsedSentence::UNSIGNED_REGISTER;
-    sentence->sentence.unSignedRegister=new UnSignedRegister();
-    sentence->registerId=registerId;
-    sentence->sentence.unSignedRegister->registerValueUnsigned=*(payloadBytes+4);
-  }
-  else if(registerDesc->byteLen==2 && registerDesc->encoding==SIGNED){
-    sentence->sentenceType=VHParsedSentence::SIGNED_REGISTER;
-    sentence->sentence.signedRegister=new SignedRegister();
-    sentence->registerId=registerId;
-    sentence->sentence.signedRegister->registerValueSigned=le16toh(*(uint16_t*) (payloadBytes+4));
-  }
-  else if(registerDesc->byteLen==4 && registerDesc->encoding==SIGNED){
-    sentence->sentenceType=VHParsedSentence::SIGNED_REGISTER;
-    sentence->sentence.signedRegister=new SignedRegister();
-    sentence->registerId=registerId;
-    sentence->sentence.signedRegister->registerValueSigned=le32toh(*(uint32_t*) (payloadBytes+4));
-  }
-  else if(registerDesc->byteLen==2 && registerDesc->encoding==UNSIGNED){
-    sentence->sentenceType=VHParsedSentence::UNSIGNED_REGISTER;
-    sentence->sentence.unSignedRegister=new UnSignedRegister();
-    sentence->registerId=registerId;
-    sentence->sentence.unSignedRegister->registerValueUnsigned=le16toh(*(uint16_t*) (payloadBytes+4));
-  }
-  else if(registerDesc->byteLen==4 && registerDesc->encoding==UNSIGNED){
-    sentence->sentenceType=VHParsedSentence::UNSIGNED_REGISTER;
-    sentence->sentence.unSignedRegister=new UnSignedRegister();
-    sentence->registerId=registerId;
-    sentence->sentence.unSignedRegister->registerValueUnsigned=le32toh(*(uint32_t*) (payloadBytes+4));
-  }
-  else if(0x0100==sentence->registerId){
-    parseProductId(payloadBytes+4);
+  if(0x0100==sentence->registerId){
+    parseProductId(payloadBytes, payloadBytesLen, sentence);
   }
   else if(0x0104==sentence->registerId){
-    parseGroupId(payloadBytes+4);
+    parseGroupId(payloadBytes, payloadBytesLen, sentence);
   }
   else if(0x010A==sentence->registerId){
-    parseSerialNumber(payloadBytes+4);
+    parseSerialNumber(payloadBytes, payloadBytesLen, sentence);
   }
   else if(0x010B==sentence->registerId){
-    parseModelName(payloadBytes+4);
+    parseModelName(payloadBytes, payloadBytesLen, sentence);
   }
   else if(0x0140==sentence->registerId){
-    parseCapabilities(payloadBytes+4);
+    parseCapabilities(payloadBytes, payloadBytesLen, sentence);
   }
   else if(0x1050<=sentence->registerId && 0x106E>=sentence->registerId){
-    parseHistoryDayRecord(payloadBytes+4, payloadBytesLen, sentence);
+    parseHistoryDayRecord(payloadBytes, payloadBytesLen, sentence);
   }
   else if(0x104F==sentence->registerId){
-    parseHistoryTotalRecord(payloadBytes+4, payloadBytesLen, sentence);
+    parseHistoryTotalRecord(payloadBytes, payloadBytesLen, sentence);
+  }
+  else if(registerDesc->byteLen==1 && registerDesc->encoding==SIGNED){
+    sentence->type=VHParsedSentence::SIGNED_REGISTER;
+    sentence->sentence.signedRegister=new SignedRegister();
+    sentence->sentence.signedRegister->value=*(payloadBytes);
+    payloadBytes+=registerDesc->byteLen;
+  }
+  else if(registerDesc->byteLen==1 && registerDesc->encoding==UNSIGNED){
+    sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
+    sentence->sentence.unsignedRegister=new UnSignedRegister();
+    sentence->sentence.unsignedRegister->value=*(payloadBytes);
+    payloadBytes+=registerDesc->byteLen;
+  }
+  else if(registerDesc->byteLen==2 && registerDesc->encoding==SIGNED){
+    sentence->type=VHParsedSentence::SIGNED_REGISTER;
+    sentence->sentence.signedRegister=new SignedRegister();
+    sentence->sentence.signedRegister->value=le16toh(*(uint16_t*) (payloadBytes));
+    payloadBytes+=registerDesc->byteLen;
+  }
+  else if(registerDesc->byteLen==4 && registerDesc->encoding==SIGNED){
+    sentence->type=VHParsedSentence::SIGNED_REGISTER;
+    sentence->sentence.signedRegister=new SignedRegister();
+    sentence->sentence.signedRegister->value=le32toh(*(uint32_t*) (payloadBytes));
+    payloadBytes+=registerDesc->byteLen;
+  }
+  else if(registerDesc->byteLen==2 && registerDesc->encoding==UNSIGNED){
+    sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
+    sentence->sentence.unsignedRegister=new UnSignedRegister();
+    sentence->sentence.unsignedRegister->value=le16toh(*(uint16_t*) (payloadBytes));
+    payloadBytes+=registerDesc->byteLen;
+  }
+  else if(registerDesc->byteLen==4 && registerDesc->encoding==UNSIGNED){
+    sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
+    sentence->sentence.unsignedRegister=new UnSignedRegister();
+    sentence->sentence.unsignedRegister->value=le32toh(*(uint32_t*) (payloadBytes));
+    payloadBytes+=registerDesc->byteLen;
   }
   else{
     printf("Unhandeled combination of byte len %d encoding %d and register 0x%X\n", registerDesc->byteLen, registerDesc->encoding, sentence->registerId);
@@ -247,17 +265,18 @@ VHParsedSentence* parseDone(const uint8_t* payloadBytes){
   printf("TODO Parse DONE response\n");
   //Parsing DONE messages depends on the last command we sent...
   VHParsedSentence* sentence=new VHParsedSentence(0);
-  sentence->sentenceType=VHParsedSentence::DONE;
+  sentence->type=VHParsedSentence::DONE;
   return sentence;
 }
 
 VHParsedSentence* parsePong(const uint8_t* payloadBytes){
-  printf("Parse ping response\n");
+  printf("Parse pong\n");
   VHParsedSentence* sentence=new VHParsedSentence(0);
-  sentence->sentenceType=VHParsedSentence::PING;
+  sentence->type=VHParsedSentence::PONG;
   sentence->sentence.pingResponse=new ParsedSentencePingResponse();
 
   sentence->sentence.pingResponse->typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
+  printf("\ttypeAndVersion=0x%04X\n", sentence->sentence.pingResponse->typeAndVersion);
   sentence->sentence.pingResponse->appType=sentence->sentence.pingResponse->typeAndVersion>>14;
   if(3==sentence->sentence.pingResponse->appType){
     sentence->sentence.pingResponse->rcVersion=payloadBytes[1]&0b00111111;
@@ -267,11 +286,10 @@ VHParsedSentence* parsePong(const uint8_t* payloadBytes){
 
 VHParsedSentence* parseAppVersion(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
   printf("Got AppVersion message\n");
-//  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
   uint16_t appversion=le16toh(*(uint16_t*)(payloadBytes+1));
   printf("\tFirmware version=0x%04X\n", appversion);
   VHParsedSentence* sentence=new VHParsedSentence(0);
-  sentence->sentenceType=VHParsedSentence::FIRMWARE_VERSION;
+  sentence->type=VHParsedSentence::FIRMWARE_VERSION;
   return sentence;
 }
 
@@ -282,12 +300,12 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   printf("Parsing %s", hexLine);
 
   int hexLineLen=strlen(hexLine);
-  if(hexLineLen<5){
-    printf("Hexline is too short\n");
+  if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
+    printf("The hexline length should start with : end with \n and be of odd length. ignoring this: %.*s\n", hexLineLen, hexLine);
     return NULL;
   }
-  if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
-    printf("The hexline length should start with : end with \n and be of odd length\n");
+  if(hexLineLen<5){
+    printf("Hexline is too short\n");
     return NULL;
   }
 
@@ -323,14 +341,9 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   else if(HEXCMD_PING==payloadBytes[0]) {
     sentence=parsePong(payloadBytes);
   }
-  else if(HEXCMD_SET==payloadBytes[0]) {
-    printf("Got SET response\n");
-    sentence=new VHParsedSentence(0);
-    sentence->sentenceType=VHParsedSentence::SET;
-  }
 
   free(payloadBytes);
-  if(sentence==NULL || sentence->sentenceType==VHParsedSentence::SentenceType::NONE){
+  if(sentence==NULL || sentence->type==VHParsedSentence::SentenceType::NONE){
     printf("Unknown/Unhandled HEX command %s\n", hexLine);
 //    exit(1);
   }
@@ -344,6 +357,13 @@ void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* p
   payloadBytes[3]=flag;
 }
 
+void assertEquals(const char* expected, const char* actual, const char* failureMsg){
+  if(strcmp(expected, actual)!=0){
+    printf("%s. Was expecting %s but got %s\n", failureMsg, expected, actual);
+    exit(0);
+  }
+}
+
 void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg){
   if(expected!=actual){
     printf("%s. Was expecting %d but got %d\n", failureMsg, expected, actual);
@@ -353,23 +373,41 @@ void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg){
 
 void testParser(){
   VHParsedSentence* sentence;
-  sentence=parseHexLine(":A4E030000FA\n");
+
+//  sentence=parseHexLine(":AD5ED0009057B\n:ABBED00E32997\n:A07020000000");
+  sentence=parseHexLine(":70401000A3F\n");
+  assertEquals(VHParsedSentence::UNSIGNED_REGISTER, sentence->type, "Should be a signed register");
+  assertEquals(10, sentence->sentence.signedRegister->value, "10");
+
+  sentence=parseHexLine(":70001000062A0FF4C\n");
+
+  sentence=parseHexLine(":70A01004851313834304D4145493400000000008D\n");
+  assertEquals(VHParsedSentence::STRING, sentence->type, "Should be a STRING");
+  assertEquals("HQ1840MAEI4", sentence->sentence.stringValue->c_str(), "");
+
+  sentence=parseHexLine(":70B0100536D617274536F6C61722043686172676572204D505054203135302F363000B2\n");
+  assertEquals(VHParsedSentence::STRING, sentence->type, "Should be a STRING");
+  assertEquals("SmartSolar Charger MPPT 150/60", sentence->sentence.stringValue->c_str(), "");
+
+  sentence=parseHexLine(":740010076EF2F0871\n"); //Capablilities
+
+  sentence=parseHexLine(":A4E030000FA\n"); //Unknown from the documentation
   delete sentence;
 
-  sentence=parseHexLine(":305004D\n");
+  sentence=parseHexLine(":305004D\n"); //Firmware version
   delete sentence;
 
   sentence=parseHexLine(":51641F9\n");
-  assertEquals(VHParsedSentence::PING, sentence->sentenceType, "Should be ping");
+  assertEquals(VHParsedSentence::PONG, sentence->type, "Should be ping");
   delete sentence;
 
   sentence=parseHexLine(":11641FD\n");
-  assertEquals(VHParsedSentence::DONE, sentence->sentenceType, "Should be done");
+  assertEquals(VHParsedSentence::DONE, sentence->type, "Should be done");
   delete sentence;
 
 //  sentence=parseHexLine(":A4F10000100000000006E5A00006E5A00008E12F9051E9604FFFFFFFFFFFFFFFFFFFFFFFFFF12\n");
   sentence=parseHexLine(":A501000007F000000FFFFFFFF9605DF040000000000A300830177007401000000012811F700AE\n");
-  assertEquals(VHParsedSentence::HISTORY_DAILY_REGISTER, sentence->sentenceType, "HISTORY_DAILY_REGISTER");
+  assertEquals(VHParsedSentence::HISTORY_DAILY_REGISTER, sentence->type, "HISTORY_DAILY_REGISTER");
   assertEquals(0x1050, sentence->registerId, "Daily history");
   assertEquals(127, sentence->sentence.historyDaily->yield, "yield");
   assertEquals(0xFFFFFFFF, sentence->sentence.historyDaily->consumed, "consumed");
@@ -389,7 +427,6 @@ void testParser(){
 
   assertEquals(0, sentence->sentence.historyDaily->daySequenceNumber, "daySequenceNumber");
   assertEquals(60561, sentence->sentence.historyDaily->maxBattCurrent, "maxBattCurrent");
-
   delete sentence;
 
   sentence=parseHexLine(":A4F10000100000000005655010056550100EB36FC051E7500FFFFFFFFFFFFFFFFFFFFFFFFFFEB\n");
