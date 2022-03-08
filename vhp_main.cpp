@@ -58,6 +58,19 @@ void printUnsignedRegister(VHParsedSentence* sentence, std::stringstream& ss){
   }
 }
 
+void printStringRegister(VHParsedSentence* sentence, std::stringstream& ss){
+  ss<<"\t"<<"registerId="<<sentence->registerId<<std::endl;
+  ss<<"\t"<<"registerValueUnsigned="<<sentence->sentence.unsignedRegister->value<<std::endl;
+
+  const RegisterDesc* registerDesc=lookupRegister(sentence->registerId);
+  if(NULL==registerDesc){
+    printf("Did not find a description of this register\n");
+    return;
+  }
+  printf("\tRegister for '%s'\n", registerDesc->desc);
+  printf("\tString value %s\n", sentence->sentence.stringValue->c_str());
+}
+
 void printHistoryTotal(VHParsedSentence* sentence, std::stringstream& ss){
   ss<<"\t"<<"totalYieldUser="<<(sentence->sentence.historyTotal->totalYieldUser*0.01)<<std::endl;
   ss<<"\t"<<"totalYieldSystem="<<(sentence->sentence.historyTotal->totalYieldSystem*0.01)<<std::endl;
@@ -105,6 +118,9 @@ void toPrint(VHParsedSentence* sentence){
   else if(sentence->type==VHParsedSentence::UNSIGNED_REGISTER){
     printUnsignedRegister(sentence, ss);
   }
+  else if(sentence->type==VHParsedSentence::STRING){
+    printStringRegister(sentence, ss);
+  }
   else if(sentence->type==VHParsedSentence::HISTORY_DAILY_REGISTER){
     printHistoryDaily(sentence, ss);
   }
@@ -119,7 +135,7 @@ void onAsyncSentenceReceived(VHParsedSentence* asyncSentence){
 }
 
 int main(int argc, char **argv) {
-#if 0
+#if 1
   LinuxSerial serial;
   serial.configure();
   VHPDriver vhpDriver(&serial);
@@ -130,13 +146,13 @@ int main(int argc, char **argv) {
   vhpDriver.getSerialNumber();
   vhpDriver.getModelName();
   vhpDriver.getCapabilities();
-//  while(true){
-//    VHParsedSentence* sentence=vhpDriver.readSentence();
-//    if(sentence){
-//      toPrint(sentence);
-//      delete sentence;
-//    }
-//  }
+  while(true){
+    VHParsedSentence* sentence=vhpDriver.readSentence();
+    if(sentence){
+      toPrint(sentence);
+      delete sentence;
+    }
+  }
 
 #elif 1
   testParser();

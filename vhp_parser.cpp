@@ -13,6 +13,7 @@
 
 #include "vhp_registers.h"
 #include "vhp_parser.h"
+#include "vhp_traces.h"
 
 VHParsedSentence::VHParsedSentence(uint16_t registerId) : registerId(registerId), type(NONE), isAsync(false){
 }
@@ -88,19 +89,19 @@ uint8_t hexCharToNibble(const char hexChar){
 
 void hexToBytes(const char* hexLine, uint16_t hexLineLen, uint8_t* outputBytes){
   if(hexLineLen%2!=0){
-    printf("Warning, converting a odd length hex string. There may be data loss.\n");
+    DEBUG("Warning, converting a odd length hex string. There may be data loss.\n");
   }
   uint16_t outputBytesLen=hexLineLen/2;
   for(int i=0; i<outputBytesLen; i++){
     uint8_t nibbleHigh=hexCharToNibble(hexLine[i*2]);
     uint8_t nibbleLow=hexCharToNibble(hexLine[(i*2)+1]);
     outputBytes[i]=nibbleLow|(nibbleHigh<<4);
-//    printf("hexLine[i*2]=%c outputBytes=0x%02X nibleLow=0x%02X nibleHigh=0x%02X \n", hexLine[i*2], outputBytes[i], nibleLow, nibleHigh);
+//    DEBUG("hexLine[i*2]=%c outputBytes=0x%02X nibleLow=0x%02X nibleHigh=0x%02X \n", hexLine[i*2], outputBytes[i], nibleLow, nibleHigh);
   }
 }
 
 void parseProductId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  printf("\tparseProductId\n");
+  DEBUG("\tparseProductId\n");
 //  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
 
   sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
@@ -117,7 +118,7 @@ void parseHistoryTotalRecord(const uint8_t* payloadBytes, uint16_t payloadBytesL
 
   sentence->sentence.historyTotal->totalYieldUser=le32toh(*((uint32_t*) payloadBytes));
   sentence->sentence.historyTotal->totalYieldSystem=le32toh(*((uint32_t*) payloadBytes+4));
-//  printf("\ttotalYieldSystem=%d\n", totalYieldSystem);
+//  DEBUG("\ttotalYieldSystem=%d\n", totalYieldSystem);
   sentence->sentence.historyTotal->maxPanelVoltage=le16toh(*((uint32_t*) payloadBytes+8));
   sentence->sentence.historyTotal->maxBatteryVoltage=le16toh(*((uint32_t*) payloadBytes+10));
   sentence->sentence.historyTotal->numberOfDaysAvailable=le16toh(*((uint32_t*) payloadBytes+12));
@@ -157,8 +158,8 @@ void parseHistoryDayRecord(const uint8_t* payloadBytes, uint16_t payloadBytesLen
 }
 
 void parseGroupId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  printf("\tparseGroupId\n");
-  printf("\tgroupId=%d\n", *payloadBytes);
+  DEBUG("\tparseGroupId\n");
+  DEBUG("\tgroupId=%d\n", *payloadBytes);
 
   sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
   sentence->sentence.unsignedRegister=new UnSignedRegister();
@@ -166,8 +167,8 @@ void parseGroupId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, V
 }
 
 void parseSerialNumber(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  printf("\tparseSerialNumber\n");
-  printf("\tserialNumber='%.*s'\n", payloadBytesLen, (char*) payloadBytes);
+  DEBUG("\tparseSerialNumber\n");
+  DEBUG("\tserialNumber='%.*s'\n", payloadBytesLen, (char*) payloadBytes);
 //  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
 
   sentence->type=VHParsedSentence::STRING;
@@ -175,26 +176,26 @@ void parseSerialNumber(const uint8_t* payloadBytes, const uint16_t payloadBytesL
 }
 
 void parseModelName(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  printf("\tparseModelName\n");
-  printf("\tmodelName=%.*s\n", payloadBytesLen, (char*) payloadBytes);
+  DEBUG("\tparseModelName\n");
+  DEBUG("\tmodelName=%.*s\n", payloadBytesLen, (char*) payloadBytes);
   sentence->type=VHParsedSentence::STRING;
   sentence->sentence.stringValue=new std::string((const char*) payloadBytes, payloadBytesLen);
 
 }
 
 void parseCapabilities(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  printf("\tparseCapabilities\n");
+  DEBUG("\tparseCapabilities\n");
   sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
   sentence->sentence.unsignedRegister=new UnSignedRegister();
   sentence->sentence.unsignedRegister->value=le32toh(*(uint32_t*)payloadBytes);
 
-  printf("\tcapabilities=0x%X\n", sentence->sentence.unsignedRegister->value);
+  DEBUG("\tcapabilities=0x%X\n", sentence->sentence.unsignedRegister->value);
 }
 
 VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
-  printf("Parse GET response\n");
+  DEBUG("Parse GET response\n");
   if(payloadBytesLen<5){
-    printf("Got a GET response but the payload length is wrong. %d bytes\n", payloadBytesLen);
+    DEBUG("Got a GET response but the payload length is wrong. %d bytes\n", payloadBytesLen);
     return NULL;
   }
   payloadBytes+=1; //Skip command
@@ -203,15 +204,15 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
   payloadBytes+=2;
   const RegisterDesc* registerDesc=lookupRegister(registerId);
   if(registerDesc==NULL){
-    printf("Don't know how to decode register 0x%04X\n", registerId);
+    DEBUG("Don't know how to decode register 0x%04X\n", registerId);
     return NULL;
   }
 
   uint8_t flag=*payloadBytes;
   payloadBytes+=1;
-  printf("registerId=0x%04X flag=%d\n", registerId, flag);
+  DEBUG("registerId=0x%04X flag=%d\n", registerId, flag);
   if(flag!=0){
-    printf("Something is wrong with that flag");
+    DEBUG("Something is wrong with that flag");
     return NULL;
   }
   payloadBytesLen-=4;
@@ -275,14 +276,14 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
     payloadBytes+=registerDesc->byteLen;
   }
   else{
-    printf("Unhandeled combination of byte len %d encoding %d and register 0x%X\n", registerDesc->byteLen, registerDesc->encoding, sentence->registerId);
+    DEBUG("Unhandeled combination of byte len %d encoding %d and register 0x%X\n", registerDesc->byteLen, registerDesc->encoding, sentence->registerId);
     exit(1);
   }
   return sentence;
 }
 
 VHParsedSentence* parseAsync(const uint8_t* payloadBytes, const uint16_t payloadBytesLen){
-  printf("Parse ASYNC response\n");
+  DEBUG("Parse ASYNC response\n");
   VHParsedSentence* sentence=parseGet(payloadBytes, payloadBytesLen);
   if(sentence){
     sentence->isAsync=true;
@@ -291,7 +292,7 @@ VHParsedSentence* parseAsync(const uint8_t* payloadBytes, const uint16_t payload
 }
 
 VHParsedSentence* parseDone(const uint8_t* payloadBytes){
-  printf("TODO Parse DONE response\n");
+  DEBUG("TODO Parse DONE response\n");
   //Parsing DONE messages depends on the last command we sent...
   VHParsedSentence* sentence=new VHParsedSentence(0);
   sentence->type=VHParsedSentence::DONE;
@@ -299,13 +300,13 @@ VHParsedSentence* parseDone(const uint8_t* payloadBytes){
 }
 
 VHParsedSentence* parsePong(const uint8_t* payloadBytes){
-  printf("Parse pong\n");
+  DEBUG("Parse pong\n");
   VHParsedSentence* sentence=new VHParsedSentence(0);
   sentence->type=VHParsedSentence::PONG;
   sentence->sentence.pingResponse=new ParsedSentencePingResponse();
 
   sentence->sentence.pingResponse->typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
-  printf("\ttypeAndVersion=0x%04X\n", sentence->sentence.pingResponse->typeAndVersion);
+  DEBUG("\ttypeAndVersion=0x%04X\n", sentence->sentence.pingResponse->typeAndVersion);
   sentence->sentence.pingResponse->appType=sentence->sentence.pingResponse->typeAndVersion>>14;
   if(3==sentence->sentence.pingResponse->appType){
     sentence->sentence.pingResponse->rcVersion=payloadBytes[1]&0b00111111;
@@ -314,9 +315,9 @@ VHParsedSentence* parsePong(const uint8_t* payloadBytes){
 }
 
 VHParsedSentence* parseAppVersion(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
-  printf("Got AppVersion message\n");
+  DEBUG("Got AppVersion message\n");
   uint16_t appversion=le16toh(*(uint16_t*)(payloadBytes+1));
-  printf("\tFirmware version=0x%04X\n", appversion);
+  DEBUG("\tFirmware version=0x%04X\n", appversion);
   VHParsedSentence* sentence=new VHParsedSentence(0);
   sentence->type=VHParsedSentence::FIRMWARE_VERSION;
   return sentence;
@@ -326,15 +327,15 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   if(hexLine==NULL) {
     return NULL;
   }
-  printf("Parsing %s", hexLine);
+  DEBUG("Parsing %s", hexLine);
 
   int hexLineLen=strlen(hexLine);
   if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
-    printf("The hexline length should start with : end with \n and be of odd length. ignoring this: %.*s\n", hexLineLen, hexLine);
+    DEBUG("The hexline length should start with ':' end with '\\n' and be of odd length. ignoring this: %.*s\n", hexLineLen, hexLine);
     return NULL;
   }
   if(hexLineLen<5){
-    printf("Hexline is too short\n");
+    DEBUG("Hexline is too short\n");
     return NULL;
   }
 
@@ -346,7 +347,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
 
   uint8_t computedChecksum=computeChecksum(payloadBytes, payloadBytesLen-1); //Do not use the checksum byte to compute the the checksum
   if(payloadBytes[payloadBytesLen-1]!=computedChecksum){
-    printf("Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
+    DEBUG("Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
     free(payloadBytes);
     return NULL;
   }
@@ -365,7 +366,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
     sentence=parseAppVersion(payloadBytes, payloadBytesLen);
   }
   else if(HEXCMD_PRODUCT_ID==payloadBytes[0]) {
-    printf("Got HEXCMD_PRODUCT_ID message\n");
+    DEBUG("Got HEXCMD_PRODUCT_ID message\n");
   }
   else if(HEXCMD_PING==payloadBytes[0]) {
     sentence=parsePong(payloadBytes);
@@ -373,7 +374,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
 
   free(payloadBytes);
   if(sentence==NULL || sentence->type==VHParsedSentence::SentenceType::NONE){
-    printf("Unknown/Unhandled HEX command %s\n", hexLine);
+    DEBUG("Unknown/Unhandled HEX command %s\n", hexLine);
 //    exit(1);
   }
   return sentence;
@@ -388,14 +389,14 @@ void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* p
 
 void assertEquals(const char* expected, const char* actual, const char* failureMsg){
   if(strcmp(expected, actual)!=0){
-    printf("%s. Was expecting %s but got %s\n", failureMsg, expected, actual);
+    DEBUG("%s. Was expecting %s but got %s\n", failureMsg, expected, actual);
     exit(0);
   }
 }
 
 void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg){
   if(expected!=actual){
-    printf("%s. Was expecting %d but got %d\n", failureMsg, expected, actual);
+    DEBUG("%s. Was expecting %d but got %d\n", failureMsg, expected, actual);
     exit(0);
   }
 }

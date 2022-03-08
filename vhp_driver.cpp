@@ -7,6 +7,7 @@
 
 #include "vhp_parser.h"
 #include "vhp_registers.h"
+#include "vhp_traces.h"
 
 #define SERIAL_DEVICE_PATH "/dev/ttyUSB0"
 
@@ -23,7 +24,7 @@ public:
    */
   void sendPayload(const uint8_t* payload, const uint16_t payloadLen){
     if(payloadLen<1){
-      printf("ERROR: The payload must include the command as the first byte\n");
+      DEBUG("ERROR: The payload must include the command as the first byte\n");
       return;
     }
     uint16_t hexLineLen=payloadLen*2+2+1; //Add checksum, \n
@@ -41,6 +42,7 @@ public:
 
 class VHPDriver {
   const static size_t READ_BUFFER_SIZE=256;
+  const static int NB_SENTENCES_TO_WAIT_UNTIL_RETRY=30;
 //  void onRegisterValueReceived(uint16_t registerId, uint32_t registerValue); //byte,short values are also encoded in this 32bit int.
   void onNonHexSentenceReceived(const char* nonHexSentence);
 public:
@@ -49,7 +51,7 @@ public:
   }
 
   VHParsedSentence* discardSentencesUntilType(VHParsedSentence::SentenceType typeLookedFor){
-    for(int i=0; i<20; i++){
+    for(int i=0; i<NB_SENTENCES_TO_WAIT_UNTIL_RETRY; i++){
       VHParsedSentence* sentence=readSentence();
       if(sentence==NULL){
         continue;
@@ -59,7 +61,7 @@ public:
         return sentence;
       }
       else{
-        printf("Ignoring parsed sentence because we are looking for %d\n", typeLookedFor);
+        DEBUG("Ignoring parsed sentence because we are looking for %d\n", typeLookedFor);
         delete sentence;
       }
     }
@@ -70,7 +72,7 @@ public:
    * This will ignore sentences of other registers
    */
   VHParsedSentence* discardSentencesUntilRegister(uint16_t registerIdWanted){
-    for(int i=0; i<20; i++){
+    for(int i=0; i<NB_SENTENCES_TO_WAIT_UNTIL_RETRY; i++){
       VHParsedSentence* sentence=readSentence();
       if(sentence==NULL){
         continue;
@@ -81,12 +83,12 @@ public:
           return sentence;
         }
         else{
-          printf("Ignoring parsed sentence because we are looking for register 0x%04X. This one was 0x%04X\n", registerIdWanted, sentence->registerId);
+          DEBUG("Ignoring parsed sentence because we are looking for register 0x%04X. This one was 0x%04X\n", registerIdWanted, sentence->registerId);
           delete sentence;
         }
       }
       else{
-        printf("Ignoring parsed sentence because we are looking for a register sentence. This one was a %d\n", sentence->type);
+        DEBUG("Ignoring parsed sentence because we are looking for a register sentence. This one was a %d\n", sentence->type);
         delete sentence;
       }
     }
@@ -106,13 +108,13 @@ public:
     VHParsedSentence* sentence=getRegisterValue(0x0100);
 
     uint16_t productId=sentence->sentence.unsignedRegister->value;
-    printf("\tproductId=0x%X\n", productId);
+    DEBUG("\tproductId=0x%X\n", productId);
     const ProductDescription* productDesc=lookupProductId(productId);
     if(productDesc==NULL){
-      printf("Product id not found\n");
+      DEBUG("Product id not found\n");
       return NULL;
     }
-    printf("\tProduct name is %s\n", productDesc->productName);
+    DEBUG("\tProduct name is %s\n", productDesc->productName);
 
     delete sentence;
     return productDesc;
@@ -159,7 +161,7 @@ public:
       if(sentence!=NULL){
         return sentence;
       }
-      printf("Our command seems to have been ignored, or we missed the response. Retrying...\n");
+      DEBUG("Our command seems to have been ignored, or we missed the response. Retrying...\n");
     }
   }
 
@@ -212,7 +214,7 @@ public:
   }
 
   virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
-    printf("writeHexLine: hexLine=>'%.*s'\n", hexLineLen, hexLine);
+    DEBUG("writeHexLine: hexLine=>'%.*s'\n", hexLineLen, hexLine);
     write(serialFd, hexLine, hexLineLen);
   }
 };
@@ -237,16 +239,16 @@ public:
 
   virtual const std::string readLine(){
     if(responseQueue.empty()){
-      printf("Missing a mock response. You need to add a mocked response to the MockSerial class.\n");
+      DEBUG("Missing a mock response. You need to add a mocked response to the MockSerial class.\n");
       exit(1);
     }
     std::string ret=responseQueue.front();
-//    printf("Poped %s\n", ret.c_str());
+//    DEBUG("Poped %s\n", ret.c_str());
     responseQueue.pop_front();
     return ret;
   }
 
   virtual void writeHexLine(const char* hexLine, const uint16_t hexLineLen){
-    printf("Mock->writeHexLine(%s,%d)", hexLine, hexLineLen);
+    DEBUG("Mock->writeHexLine(%s,%d)", hexLine, hexLineLen);
   }
 };
