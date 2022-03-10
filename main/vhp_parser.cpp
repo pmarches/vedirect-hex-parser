@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 
 #include <string>
+#include <string_view>
 
 #include "vhp_registers.h"
 #include "vhp_parser.h"
@@ -45,9 +46,9 @@ bool VHParsedSentence::isRegister() const {
       type==STRING;
 }
 
-uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload){
+uint8_t computeChecksum(const std::basic_string<unsigned char>& binaryPayload){
   uint8_t checksum=0x55;
-  for(int i=0; i<nbBytesPayload; i++){
+  for(int i=0; i<binaryPayload.size(); i++){
     checksum -= binaryPayload[i];
   }
   return checksum;
@@ -317,7 +318,8 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   payloadBytes[0]=hexCharToNibble(hexLine[1]); //Convert the command (first low nibble)
   hexToBytes(hexLine+2, hexPayloadLen-1, payloadBytes+1); //Skip the command and the trailing \n
 
-  uint8_t computedChecksum=computeChecksum(payloadBytes, payloadBytesLen-1); //Do not use the checksum byte to compute the the checksum
+  std::basic_string<unsigned char> payloadNoChecksum(payloadBytes, payloadBytesLen-1);
+  uint8_t computedChecksum=computeChecksum(payloadNoChecksum); //Do not use the checksum byte to compute the the checksum
   if(payloadBytes[payloadBytesLen-1]!=computedChecksum){
     DEBUG("Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
     free(payloadBytes);

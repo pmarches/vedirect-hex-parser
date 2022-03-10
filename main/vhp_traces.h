@@ -1,6 +1,9 @@
 #ifndef VHP_TRACES_H_
 #define VHP_TRACES_H_
 
+#include <inttypes.h>
+#include <stdio.h>
+
 #if 1
 #define DEBUG printf
 #else

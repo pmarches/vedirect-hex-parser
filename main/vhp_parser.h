@@ -93,9 +93,7 @@ public:
 
 void testParser();
 VHParsedSentence* parseHexLine(const char* hexLine);
-uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload);
+uint8_t computeChecksum(const std::basic_string<unsigned char>& binaryPayload);
 void byteToHex(uint8_t byte, char* hexStr);
-void bytesToHex(const uint8_t* bytes, const uint16_t nbBytes, char* hexOut);
-void hexdump(const char* msg, const void *ptr, int buflen);
 
 #endif /* VHP_PARSER_H_ */

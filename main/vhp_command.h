@@ -4,10 +4,9 @@
 #include <string>
 #include <inttypes.h>
 
-void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* payloadBytes);
-
-std::string VHPCommandGetRegister(const uint16_t registerToGet, const uint8_t flag);
-std::string VHPCommandGetRegister(const uint16_t registersToGet[], const uint8_t nbRegisters);
+std::string bytesToHex(const std::basic_string<unsigned char>& bytes);
+std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registerToGet, const uint8_t flag);
+std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registersToGet[], const uint8_t nbRegisters);
 
 void testCommandBuilder();
 

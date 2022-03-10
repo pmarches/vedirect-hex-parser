@@ -1,4 +1,7 @@
 #include <vhp_traces.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 
 void assertEquals(const char* expected, const char* actual, const char* failureMsg){
   if(strcmp(expected, actual)!=0){

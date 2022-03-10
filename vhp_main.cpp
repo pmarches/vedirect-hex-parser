@@ -12,7 +12,7 @@
 
 #include "main/vhp_command.h"
 #include "vhp_parser.h"
-#include "vhp_driver.cpp"
+#include "vhp_driver.h"
 #include "vhp_registers.h"
 
 void printRegister(uint16_t registerId, uint32_t registerValue){
