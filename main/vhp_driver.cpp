@@ -101,19 +101,24 @@ const ProductDescription* VHPDriver::getProductId(){
   return productDesc;
 }
 
-void VHPDriver::getGroupId(){
+std::string VHPDriver::getGroupId(){
   VHParsedSentence* sentence=getRegisterValue(0x0104);
   delete sentence;
+  return "X";
 }
 
-void VHPDriver::getSerialNumber(){
+std::string VHPDriver::getSerialNumber(){
   VHParsedSentence* sentence=getRegisterValue(0x010A);
+  std::string ret=*sentence->sentence.stringValue;
   delete sentence;
+  return ret;
 }
 
-void VHPDriver::getModelName(){
+std::string VHPDriver::getModelName(){
   VHParsedSentence* sentence=getRegisterValue(0x010B);
+  std::string ret=*sentence->sentence.stringValue;
   delete sentence;
+  return ret;
 }
 
 void VHPDriver::getCapabilities(){
@@ -156,6 +161,7 @@ void VHPDriver::registerAsyncSentenceHandler(void (*onAsyncHandler)(VHParsedSent
   this->onAsyncHandler=onAsyncHandler;
 }
 
+#ifdef LINUX
 LinuxSerial::LinuxSerial() :serialFd(0) {}
 LinuxSerial::~LinuxSerial() {}
 void LinuxSerial::configure(){
@@ -210,5 +216,6 @@ const std::string MockSerial::readLine(){
 }
 
 void MockSerial::writeHexLine(const std::string& hexLine){
-  DEBUG("Mock->writeHexLine(%s,%ld)", hexLine.c_str(), hexLine.size());
+  DEBUG("Mock->writeHexLine(%s,%d)", hexLine.c_str(), hexLine.size());
 }
+#endif

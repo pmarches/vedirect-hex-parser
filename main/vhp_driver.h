@@ -37,9 +37,9 @@ public:
   VHParsedSentence* discardSentencesUntilRegister(uint16_t registerIdWanted);
   void sendPingWaitPong();
   const ProductDescription* getProductId();
-  void getGroupId();
-  void getSerialNumber();
-  void getModelName();
+  std::string getGroupId();
+  std::string getSerialNumber();
+  std::string getModelName();
   void getCapabilities();
   VHParsedSentence* readSentence();
   VHParsedSentence* getRegisterValue(uint16_t registerToGet);
@@ -49,6 +49,7 @@ public:
 };
 
 
+#ifdef LINUX
 class LinuxSerial : public VHPSerial {
 public:
   LinuxSerial();
@@ -57,14 +58,6 @@ public:
   int serialFd;
   virtual const std::string readLine();
   virtual void writeHexLine(const std::string& hexLine);
-};
-
-
-class MultiplexedSerial : public VHPSerial {
-public:
-  MultiplexedSerial();
-  void configureSerialPort();
-  void selectPort(uint8_t portNumber);
 };
 
 class MockSerial  : public VHPSerial {
@@ -77,5 +70,6 @@ public:
   virtual void writeHexLine(const std::string& hexLine);
 };
 
+#endif
 
 #endif /* MAIN_VHP_DRIVER_H_ */
