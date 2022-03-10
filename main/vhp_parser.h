@@ -92,7 +92,6 @@ public:
 
 
 void testParser();
-void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* payloadBytes);
 VHParsedSentence* parseHexLine(const char* hexLine);
 uint8_t computeChecksum(const uint8_t* binaryPayload, const uint8_t nbBytesPayload);
 void byteToHex(uint8_t byte, char* hexStr);

@@ -366,7 +366,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
     sentence=parseAppVersion(payloadBytes, payloadBytesLen);
   }
   else if(HEXCMD_PRODUCT_ID==payloadBytes[0]) {
-    DEBUG("Got HEXCMD_PRODUCT_ID message\n");
+    DEBUG("Got HEXCMD_PRODUCT_ID message. Ignoring it.\n");
   }
   else if(HEXCMD_PING==payloadBytes[0]) {
     sentence=parsePong(payloadBytes);
@@ -380,24 +380,17 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   return sentence;
 }
 
-void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* payloadBytes){
-  payloadBytes[0]=HEXCMD_GET;
-  payloadBytes[1]=(uint8_t)  (registerToGet&0x00FF); //TODO Convert to little endian properly
-  payloadBytes[2]=(uint8_t) ((registerToGet&0xFF00)>>8); //TODO Convert to little endian properly
-  payloadBytes[3]=flag;
-}
-
 void assertEquals(const char* expected, const char* actual, const char* failureMsg){
   if(strcmp(expected, actual)!=0){
-    DEBUG("%s. Was expecting %s but got %s\n", failureMsg, expected, actual);
-    exit(0);
+    DEBUG("TEST FAILURE: %s. Was expecting %s but got %s\n", failureMsg, expected, actual);
+    exit(1);
   }
 }
 
 void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg){
   if(expected!=actual){
-    DEBUG("%s. Was expecting %d but got %d\n", failureMsg, expected, actual);
-    exit(0);
+    DEBUG("TEST FAILURE: %s. Was expecting %d but got %d\n", failureMsg, expected, actual);
+    exit(1);
   }
 }
 

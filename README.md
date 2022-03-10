@@ -23,4 +23,5 @@ TODO/Issues
 * Probably leaks memory
 * Increase test coverage
 * Transform into a library, add executables as examples
-
+* Improve the register lookup method. binary search or hashtable..
+* Fix the various TODOs in the code

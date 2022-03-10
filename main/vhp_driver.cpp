@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 
+#include "vhp_command.h"
 #include "vhp_parser.h"
 #include "vhp_registers.h"
 #include "vhp_traces.h"

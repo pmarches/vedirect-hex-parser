@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iostream>
 
+#include "main/vhp_command.h"
 #include "vhp_parser.h"
 #include "vhp_driver.cpp"
 #include "vhp_registers.h"
@@ -135,7 +136,7 @@ void onAsyncSentenceReceived(VHParsedSentence* asyncSentence){
 }
 
 int main(int argc, char **argv) {
-#if 1
+#if 0
   LinuxSerial serial;
   serial.configure();
   VHPDriver vhpDriver(&serial);
@@ -156,6 +157,7 @@ int main(int argc, char **argv) {
 
 #elif 1
   testParser();
+  testCommandBuilder();
 
   MockSerial serial;
   VHPDriver vhpDriver(&serial);
