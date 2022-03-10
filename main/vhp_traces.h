@@ -7,5 +7,8 @@
 #define DEBUG //
 #endif
 
+void assertEquals(const char* expected, const char* actual, const char* failureMsg);
+void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg);
+void hexdump(const char* msg, const void *ptr, int buflen);
 
 #endif /* VHP_TRACES_H_ */

@@ -1,7 +1,11 @@
 #include "vhp_command.h"
 
+#include <sstream>
+#include <iomanip>
+
 #include <vhp_registers.h>
 #include <vhp_parser.h>
+#include <vhp_traces.h>
 
 void VHPBuildGetRegisterPayload(uint16_t registerToGet, uint8_t flag, uint8_t* payloadBytes){
   payloadBytes[0]=HEXCMD_GET;
@@ -28,7 +32,17 @@ std::string VHPCommandGetRegister(const uint16_t registersToGet[], const uint8_t
   return payloadBatch;
 }
 
-void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg);
+std::string bytesToHex(const std::string bytes){
+  std::stringstream ss;
+  ss << std::hex;
+
+  for( int i(0) ; i < bytes.size(); ++i ) {
+     ss << std::setw(2) << std::setfill('0') << (int)bytes[i];
+  }
+
+  return ss.str();
+}
+
 void testCommandBuilder(){
   printf("%s\n", __FUNCTION__);
 
@@ -43,4 +57,8 @@ void testCommandBuilder(){
   const uint16_t monitoringRegisters[]={VHP_REG_PANEL_POWER, VHP_REG_CHARGER_CURRENT, VHP_REG_CHARGER_VOLTAGE, VHP_REG_CHARGER_MAX_CURRENT};
   std::string monitorCommand=VHPCommandGetRegister(monitoringRegisters, sizeof(monitoringRegisters)/sizeof(uint16_t));
   assertEquals(16, monitorCommand.size(), "4 commands used to monitor the MPPT");
+
+  std::string hexString=bytesToHex({0x01,0x65,0xFF});
+  assertEquals(hexString.c_str(), "0165FF", "bytesToHex");
 }
+
