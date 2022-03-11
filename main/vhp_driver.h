@@ -72,4 +72,6 @@ public:
 
 #endif
 
+void testDriver();
+
 #endif /* MAIN_VHP_DRIVER_H_ */

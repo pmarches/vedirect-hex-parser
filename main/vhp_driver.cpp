@@ -22,7 +22,7 @@ void VHPSerial::sendPayload(const std::basic_string<unsigned char>& payload){
 
   std::stringstream ss;
   ss << hexLine
-     << std::hex << std::setw(2) << std::setfill('0') << computeChecksum(payload)
+     << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << 0+computeChecksum(payload) //The 0+ here is a hack to get C++ to consider the uint8_t as integer a value, not a char.
      <<'\n';
 
   writeHexLine(ss.str());
@@ -218,4 +218,12 @@ const std::string MockSerial::readLine(){
 void MockSerial::writeHexLine(const std::string& hexLine){
   DEBUG("Mock->writeHexLine(%s,%ld)", hexLine.c_str(), hexLine.size());
 }
+
+void testDriver(){
+  assertEquals(0x54, computeChecksum({0x01}), "computeChecksum 0x54");
+  assertEquals(0xF9, computeChecksum({0x05, 0x16, 0x41}), "computeChecksum 0xF9");
+  MockSerial serial;
+  serial.sendPayload({0x01});
+}
+
 #endif
