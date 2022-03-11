@@ -48,15 +48,14 @@ bool VHParsedSentence::isRegister() const {
       type==STRING;
 }
 
-#include <esp_log.h>
 uint8_t computeChecksum(const std::basic_string<unsigned char>& binaryPayload){
-  ESP_LOG_BUFFER_HEX_LEVEL(TAG, binaryPayload.c_str(), binaryPayload.size(), ESP_LOG_DEBUG);
+//  ESP_LOG_BUFFER_HEX_LEVEL(TAG, binaryPayload.c_str(), binaryPayload.size(), ESP_LOG_DEBUG);
 
   uint8_t checksum=0x55;
   for(int i=0; i<binaryPayload.size(); i++){
     checksum -= binaryPayload[i];
   }
-  ESP_LOGD(TAG, "checksum=0x%02X", checksum);
+  DEBUG_PRINTD(TAG, "checksum=0x%02X", checksum);
   return checksum;
 }
 
