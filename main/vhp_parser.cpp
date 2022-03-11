@@ -287,6 +287,7 @@ VHParsedSentence* parsePong(const uint8_t* payloadBytes){
   return sentence;
 }
 
+#if 0
 VHParsedSentence* parseAppVersion(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
   DEBUG("Got AppVersion message\n");
   uint16_t appversion=le16toh(*(uint16_t*)(payloadBytes+1));
@@ -295,6 +296,7 @@ VHParsedSentence* parseAppVersion(const uint8_t* payloadBytes, uint16_t payloadB
   sentence->type=VHParsedSentence::FIRMWARE_VERSION;
   return sentence;
 }
+#endif
 
 VHParsedSentence* parseHexLine(const char* hexLine){
   if(hexLine==NULL) {
@@ -302,6 +304,9 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   }
   DEBUG("Parsing %s", hexLine);
 
+  while(hexLine[0]!='\0' && hexLine[0]!=':'){
+    hexLine++;
+  }
   int hexLineLen=strlen(hexLine);
   if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
     DEBUG("The hexline length should start with ':' end with '\\n' and be of odd length. ignoring this: %.*s\n", hexLineLen, hexLine);
@@ -327,20 +332,24 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   }
 
   VHParsedSentence *sentence=NULL;
-  if(HEXCMD_GET==payloadBytes[0]) {
+  if(HEXRSP_GET==payloadBytes[0]) {
     sentence=parseGet(payloadBytes, payloadBytesLen);
   }
-  else if(HEXCMD_ASYNC==payloadBytes[0]) {
+  else if(HEXRSP_ASYNC==payloadBytes[0]) {
     sentence=parseAsync(payloadBytes, payloadBytesLen);
   }
-  else if(HEXCMD_DONE==payloadBytes[0]) {
+  else if(HEXRSP_DONE==payloadBytes[0]) {
     sentence=parseDone(payloadBytes);
   }
-  else if(HEXCMD_APP_VERSION==payloadBytes[0]) {
+#if 0
+  else if(HEXRSP_APP_VERSION==payloadBytes[0]) {
     sentence=parseAppVersion(payloadBytes, payloadBytesLen);
   }
-  else if(HEXCMD_PRODUCT_ID==payloadBytes[0]) {
-    DEBUG("Got HEXCMD_PRODUCT_ID message. Ignoring it.\n");
+#endif
+  else if(HEXRSP_ERROR==payloadBytes[0]) {
+    DEBUG("Got HEXRSP_ERROR message. Checksum was wrong\n");
+    sentence=new VHParsedSentence(0);
+    sentence->type=VHParsedSentence::ERROR;
   }
   else if(HEXCMD_PING==payloadBytes[0]) {
     sentence=parsePong(payloadBytes);
@@ -421,4 +430,6 @@ void testParser(){
   sentence=parseHexLine(":ABDED0002009F\n");
   sentence=parseHexLine(":A0702000000000042\n");
   sentence=parseHexLine(":A0202000200000045\n");
+  sentence=parseHexLine("Checksum 0:4AAAAFD\n");
+  assertEquals(sentence->type, 1, "Should handle leading garbage");
 }

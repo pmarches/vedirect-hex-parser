@@ -216,6 +216,6 @@ const std::string MockSerial::readLine(){
 }
 
 void MockSerial::writeHexLine(const std::string& hexLine){
-  DEBUG("Mock->writeHexLine(%s,%d)", hexLine.c_str(), hexLine.size());
+  DEBUG("Mock->writeHexLine(%s,%ld)", hexLine.c_str(), hexLine.size());
 }
 #endif

@@ -13,6 +13,16 @@ enum VEDIRECT_HEX_COMMAND {
     HEXCMD_ASYNC=0xA,
 };
 
+enum VEDIRECT_HEX_RESPONSE {
+    HEXRSP_DONE=0x1,
+    HEXRSP_UNKNOWN=0x3,
+    HEXRSP_ERROR=0x4,
+    HEXRSP_PING=0x5,
+    HEXRSP_GET=0x7,
+    HEXRSP_SET=0x8,
+    HEXRSP_ASYNC=0xA,
+};
+
 typedef struct {
   uint32_t value;
 } UnSignedRegister;
@@ -67,6 +77,7 @@ public:
   bool isAsync;
   enum SentenceType {
     NONE,
+    ERROR,
     PONG,
     FIRMWARE_VERSION,
     DONE,
