@@ -7,7 +7,7 @@
 #include <vhp_parser.h>
 #include <vhp_traces.h>
 
-std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registerToGet, const uint8_t flag){
+std::basic_string<unsigned char> VHPBuildCommandFromRegistersToGet(const uint16_t registerToGet, const uint8_t flag){
   std::basic_string<unsigned char> payloadBytes;
   payloadBytes.reserve(4);
   payloadBytes+=HEXCMD_GET;
@@ -17,38 +17,53 @@ std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registerTo
   return payloadBytes;
 }
 
-std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registersToGet[], const uint8_t nbRegisters){
-  std::basic_string<unsigned char> payloadBatch;
-  for(int i=0; i<nbRegisters; i++){
-    payloadBatch+=VHPCommandGetRegister(registersToGet[i], 0);
-  }
-  return payloadBatch;
+std::string VHPCommandBytesToHexString(const std::basic_string<uint8_t>& inputBytes){
+  std::string hexLine=bytesToHex(inputBytes);
+  hexLine[0]=':'; //Overwrite the leading HEX 0
+
+  std::stringstream ss;
+  ss << hexLine
+     << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << 0+computeChecksum(inputBytes) //The 0+ here is a hack to get C++ to consider the uint8_t as integer a value, not a char.
+     <<'\n';
+  return ss.str();
 }
 
+std::string VHPBatchGetRegisters(const uint16_t registersToGet[], const uint8_t nbRegisters){
+  std::string hexPayloadBatch;
+  for(int i=0; i<nbRegisters; i++){
+    std::basic_string<uint8_t> singlePayloadBytes=VHPBuildCommandFromRegistersToGet(registersToGet[i], 0);
+    hexPayloadBatch+=VHPCommandBytesToHexString(singlePayloadBytes);
+  }
+  return hexPayloadBatch;
+}
+
+#include <esp_log.h>
 std::string bytesToHex(const std::basic_string<unsigned char>& bytes){
+  ESP_LOG_BUFFER_HEX_LEVEL(__FUNCTION__, bytes.c_str(), bytes.size(), ESP_LOG_DEBUG);
   std::stringstream ss;
-  ss << std::hex << std::setw(2) << std::setfill('0') << std::uppercase;
 
   for( int i(0) ; i < bytes.size(); ++i ) {
-     ss << 0+bytes[i];
+     ss << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << 0+bytes[i];
   }
 
-  return ss.str();
+  std::string hexBytes=ss.str();
+  ESP_LOGD(__FUNCTION__, "hexBytes=%.*s", hexBytes.size(), hexBytes.c_str());
+  return hexBytes;
 }
 
 void testCommandBuilder(){
   printf("%s\n", __FUNCTION__);
 
-  std::basic_string<unsigned char> singleCmd=VHPCommandGetRegister(VHP_REG_MODEL_NAME, 0);
+  std::basic_string<unsigned char> singleCmd=VHPBuildCommandFromRegistersToGet(VHP_REG_MODEL_NAME, 0);
   assertEquals(4, singleCmd.size(), "single command");
   hexdump("singleCmd", singleCmd.c_str(), singleCmd.size());
 
   const uint16_t startupRegisters[]={VHP_REG_PRODUCT_ID, VHP_REG_MODEL_NAME, VHP_REG_DEVICE_MODE};
-  std::basic_string<unsigned char> startupCommand=VHPCommandGetRegister(startupRegisters, sizeof(startupRegisters)/sizeof(uint16_t));
+  std::string startupCommand=VHPBatchGetRegisters(startupRegisters, sizeof(startupRegisters)/sizeof(uint16_t));
   assertEquals(12, startupCommand.size(), "3 commands issued at startup");
 
   const uint16_t monitoringRegisters[]={VHP_REG_PANEL_POWER, VHP_REG_CHARGER_CURRENT, VHP_REG_CHARGER_VOLTAGE, VHP_REG_CHARGER_MAX_CURRENT};
-  std::basic_string<unsigned char> monitorCommand=VHPCommandGetRegister(monitoringRegisters, sizeof(monitoringRegisters)/sizeof(uint16_t));
+  std::string monitorCommand=VHPBatchGetRegisters(monitoringRegisters, sizeof(monitoringRegisters)/sizeof(uint16_t));
   assertEquals(16, monitorCommand.size(), "4 commands used to monitor the MPPT");
 
   std::basic_string<unsigned char> bytes({0x01,0x65,0xFE});

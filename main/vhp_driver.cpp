@@ -12,20 +12,13 @@ VHPSerial::~VHPSerial() {}
 /***
  * Payload is the command and it's parameters. No leading ':' or checksum
  */
-void VHPSerial::sendPayload(const std::basic_string<unsigned char>& payload){
-  if(payload.size()<1){
+void VHPSerial::sendPayload(const std::basic_string<unsigned char>& binaryPayload){
+  if(binaryPayload.size()<1){
     DEBUG("ERROR: The payload must include the command as the first byte\n");
     return;
   }
-  std::string hexLine=bytesToHex(payload);
-  hexLine[0]=':';
-
-  std::stringstream ss;
-  ss << hexLine
-     << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << 0+computeChecksum(payload) //The 0+ here is a hack to get C++ to consider the uint8_t as integer a value, not a char.
-     <<'\n';
-
-  writeHexLine(ss.str());
+  std::string hexPayload=VHPCommandBytesToHexString(binaryPayload);
+  writeHexLine(hexPayload);
 }
 
 VHPDriver::VHPDriver(VHPSerial* serial) : serial(serial), onAsyncHandler(nullptr) {
@@ -137,7 +130,7 @@ VHParsedSentence* VHPDriver::readSentence(){
 
 
 VHParsedSentence* VHPDriver::getRegisterValue(uint16_t registerToGet){
-  std::basic_string<unsigned char> cmd=VHPCommandGetRegister(registerToGet, 0);
+  std::basic_string<unsigned char> cmd=VHPBuildCommandFromRegistersToGet(registerToGet, 0);
 
   while(true){
     serial->sendPayload(cmd);

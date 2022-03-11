@@ -5,8 +5,10 @@
 #include <inttypes.h>
 
 std::string bytesToHex(const std::basic_string<unsigned char>& bytes);
-std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registerToGet, const uint8_t flag);
-std::basic_string<unsigned char> VHPCommandGetRegister(const uint16_t registersToGet[], const uint8_t nbRegisters);
+std::string VHPCommandBytesToHexString(const std::basic_string<uint8_t>& inputBytes);
+
+std::basic_string<unsigned char> VHPBuildCommandFromRegistersToGet(const uint16_t registerToGet, const uint8_t flag);
+std::string VHPBatchGetRegisters(const uint16_t registersToGet[], const uint8_t nbRegisters);
 
 void testCommandBuilder();
 
