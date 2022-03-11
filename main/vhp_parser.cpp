@@ -302,14 +302,14 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   if(hexLine==NULL) {
     return NULL;
   }
-  DEBUG("Parsing %s", hexLine);
+  DEBUG("Parsing '%s'", hexLine);
 
   while(hexLine[0]!='\0' && hexLine[0]!=':'){
     hexLine++;
   }
   int hexLineLen=strlen(hexLine);
   if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
-    DEBUG("The hexline length should start with ':' end with '\\n' and be of odd length. ignoring this: %.*s\n", hexLineLen, hexLine);
+    DEBUG("The hexline length should start with ':' end with '\\n' and be of odd length, ignoring.\n");
     return NULL;
   }
   if(hexLineLen<5){
