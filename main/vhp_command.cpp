@@ -7,6 +7,8 @@
 #include <vhp_parser.h>
 #include <vhp_traces.h>
 
+#define TAG __FILE__
+
 std::basic_string<unsigned char> VHPBuildCommandFromRegistersToGet(const uint16_t registerToGet, const uint8_t flag){
   std::basic_string<unsigned char> payloadBytes;
   payloadBytes.reserve(4);
@@ -37,9 +39,8 @@ std::string VHPBatchGetRegisters(const uint16_t registersToGet[], const uint8_t 
   return hexPayloadBatch;
 }
 
-#include <esp_log.h>
 std::string bytesToHex(const std::basic_string<unsigned char>& bytes){
-  ESP_LOG_BUFFER_HEX_LEVEL(__FUNCTION__, bytes.c_str(), bytes.size(), ESP_LOG_DEBUG);
+//  ESP_LOG_BUFFER_HEX_LEVEL(TAG, bytes.c_str(), bytes.size(), ESP_LOG_DEBUG);
   std::stringstream ss;
 
   for( int i(0) ; i < bytes.size(); ++i ) {
@@ -47,12 +48,12 @@ std::string bytesToHex(const std::basic_string<unsigned char>& bytes){
   }
 
   std::string hexBytes=ss.str();
-  ESP_LOGD(__FUNCTION__, "hexBytes=%.*s", hexBytes.size(), hexBytes.c_str());
+  DEBUG_PRINTD(TAG, "hexBytes=%.*s", hexBytes.size(), hexBytes.c_str());
   return hexBytes;
 }
 
 void testCommandBuilder(){
-  printf("%s\n", __FUNCTION__);
+  DEBUG_PRINTD(TAG, "%s\n", __FUNCTION__);
 
   std::basic_string<unsigned char> singleCmd=VHPBuildCommandFromRegistersToGet(VHP_REG_MODEL_NAME, 0);
   assertEquals(4, singleCmd.size(), "single command");

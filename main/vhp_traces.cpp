@@ -3,16 +3,18 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#define TAG __FILE__
+
 void assertEquals(const char* expected, const char* actual, const char* failureMsg){
   if(strcmp(expected, actual)!=0){
-    DEBUG("TEST FAILURE: %s. Was expecting %s but got %s\n", failureMsg, expected, actual);
+    DEBUG_PRINTD(TAG,"TEST FAILURE: %s. Was expecting %s but got %s\n", failureMsg, expected, actual);
     exit(1);
   }
 }
 
 void assertEquals(uint32_t expected, uint32_t actual, const char* failureMsg){
   if(expected!=actual){
-    DEBUG("TEST FAILURE: %s. Was expecting %d but got %d\n", failureMsg, expected, actual);
+    DEBUG_PRINTD(TAG,"TEST FAILURE: %s. Was expecting %d but got %d\n", failureMsg, expected, actual);
     exit(1);
   }
 }

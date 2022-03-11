@@ -7,6 +7,8 @@
 #include <sstream>
 #include <iomanip>
 
+#define TAG __FILE__
+
 VHPSerial::~VHPSerial() {}
 
 /***
@@ -14,7 +16,7 @@ VHPSerial::~VHPSerial() {}
  */
 void VHPSerial::sendPayload(const std::basic_string<unsigned char>& binaryPayload){
   if(binaryPayload.size()<1){
-    DEBUG("ERROR: The payload must include the command as the first byte\n");
+    DEBUG_PRINTD(TAG,"ERROR: The payload must include the command as the first byte\n");
     return;
   }
   std::string hexPayload=VHPCommandBytesToHexString(binaryPayload);
@@ -35,7 +37,7 @@ VHParsedSentence* VHPDriver::discardSentencesUntilType(VHParsedSentence::Sentenc
       return sentence;
     }
     else{
-      DEBUG("Ignoring parsed sentence because we are looking for %d\n", typeLookedFor);
+      DEBUG_PRINTD(TAG,"Ignoring parsed sentence because we are looking for %d\n", typeLookedFor);
       delete sentence;
     }
   }
@@ -57,12 +59,12 @@ VHParsedSentence* VHPDriver::discardSentencesUntilRegister(uint16_t registerIdWa
         return sentence;
       }
       else{
-        DEBUG("Ignoring parsed sentence because we are looking for register 0x%04X. This one was 0x%04X\n", registerIdWanted, sentence->registerId);
+        DEBUG_PRINTD(TAG,"Ignoring parsed sentence because we are looking for register 0x%04X. This one was 0x%04X\n", registerIdWanted, sentence->registerId);
         delete sentence;
       }
     }
     else{
-      DEBUG("Ignoring parsed sentence because we are looking for a register sentence. This one was a %d\n", sentence->type);
+      DEBUG_PRINTD(TAG,"Ignoring parsed sentence because we are looking for a register sentence. This one was a %d\n", sentence->type);
       delete sentence;
     }
   }
@@ -82,13 +84,13 @@ const ProductDescription* VHPDriver::getProductId(){
   VHParsedSentence* sentence=getRegisterValue(0x0100);
 
   uint16_t productId=sentence->sentence.unsignedRegister->value;
-  DEBUG("\tproductId=0x%X\n", productId);
+  DEBUG_PRINTD(TAG,"\tproductId=0x%X\n", productId);
   const ProductDescription* productDesc=lookupProductId(productId);
   if(productDesc==NULL){
-    DEBUG("Product id not found\n");
+    DEBUG_PRINTD(TAG,"Product id not found\n");
     return NULL;
   }
-  DEBUG("\tProduct name is %s\n", productDesc->productName);
+  DEBUG_PRINTD(TAG,"\tProduct name is %s\n", productDesc->productName);
 
   delete sentence;
   return productDesc;
@@ -138,7 +140,7 @@ VHParsedSentence* VHPDriver::getRegisterValue(uint16_t registerToGet){
     if(sentence!=NULL){
       return sentence;
     }
-    DEBUG("Our command seems to have been ignored, or we missed the response. Retrying...\n");
+    DEBUG_PRINTD(TAG,"Our command seems to have been ignored, or we missed the response. Retrying...\n");
   }
 }
 
@@ -185,7 +187,7 @@ const std::string LinuxSerial::readLine(){
 }
 
 void LinuxSerial::writeHexLine(const std::string& hexLine){
-  DEBUG("writeHexLine: hexLine=>'%.*s'\n", (int) hexLine.size(), hexLine.c_str());
+  DEBUG_PRINTD(TAG,"writeHexLine: hexLine=>'%.*s'\n", (int) hexLine.size(), hexLine.c_str());
   write(serialFd, hexLine.c_str(), hexLine.size());
 }
 
@@ -199,17 +201,17 @@ void MockSerial::configure(){
 
 const std::string MockSerial::readLine(){
   if(responseQueue.empty()){
-    DEBUG("Missing a mock response. You need to add a mocked response to the MockSerial class.\n");
+    DEBUG_PRINTD(TAG,"Missing a mock response. You need to add a mocked response to the MockSerial class.\n");
     exit(1);
   }
   std::string ret=responseQueue.front();
-  //    DEBUG("Poped %s\n", ret.c_str());
+  //    DEBUG_PRINTD(TAG,"Poped %s\n", ret.c_str());
   responseQueue.pop_front();
   return ret;
 }
 
 void MockSerial::writeHexLine(const std::string& hexLine){
-  DEBUG("Mock->writeHexLine(%s,%ld)", hexLine.c_str(), hexLine.size());
+  DEBUG_PRINTD(TAG,"Mock->writeHexLine(%s,%ld)", hexLine.c_str(), hexLine.size());
 }
 
 void testDriver(){

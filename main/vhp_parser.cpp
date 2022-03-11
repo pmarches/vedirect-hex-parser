@@ -17,6 +17,8 @@
 #include "vhp_traces.h"
 #include <endian.h>
 
+#define TAG __FILE__
+
 VHParsedSentence::VHParsedSentence(uint16_t registerId) : registerId(registerId), isAsync(false), type(NONE) {
 }
 
@@ -48,13 +50,13 @@ bool VHParsedSentence::isRegister() const {
 
 #include <esp_log.h>
 uint8_t computeChecksum(const std::basic_string<unsigned char>& binaryPayload){
-  ESP_LOG_BUFFER_HEX_LEVEL(__FUNCTION__, binaryPayload.c_str(), binaryPayload.size(), ESP_LOG_DEBUG);
+  ESP_LOG_BUFFER_HEX_LEVEL(TAG, binaryPayload.c_str(), binaryPayload.size(), ESP_LOG_DEBUG);
 
   uint8_t checksum=0x55;
   for(int i=0; i<binaryPayload.size(); i++){
     checksum -= binaryPayload[i];
   }
-  ESP_LOGD(__FUNCTION__, "checksum=0x%02X", checksum);
+  ESP_LOGD(TAG, "checksum=0x%02X", checksum);
   return checksum;
 }
 
@@ -66,19 +68,19 @@ uint8_t hexCharToNibble(const char hexChar){
 
 void hexToBytes(const char* hexLine, uint16_t hexLineLen, uint8_t* outputBytes){
   if(hexLineLen%2!=0){
-    DEBUG("Warning, converting a odd length hex string. There may be data loss.\n");
+    DEBUG_PRINTD(TAG,"Warning, converting a odd length hex string. There may be data loss.\n");
   }
   uint16_t outputBytesLen=hexLineLen/2;
   for(int i=0; i<outputBytesLen; i++){
     uint8_t nibbleHigh=hexCharToNibble(hexLine[i*2]);
     uint8_t nibbleLow=hexCharToNibble(hexLine[(i*2)+1]);
     outputBytes[i]=nibbleLow|(nibbleHigh<<4);
-//    DEBUG("hexLine[i*2]=%c outputBytes=0x%02X nibleLow=0x%02X nibleHigh=0x%02X \n", hexLine[i*2], outputBytes[i], nibleLow, nibleHigh);
+//    DEBUG_PRINTD(TAG,"hexLine[i*2]=%c outputBytes=0x%02X nibleLow=0x%02X nibleHigh=0x%02X \n", hexLine[i*2], outputBytes[i], nibleLow, nibleHigh);
   }
 }
 
 void parseProductId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  DEBUG("\tparseProductId\n");
+  DEBUG_PRINTD(TAG,"\tparseProductId\n");
 //  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
 
   sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
@@ -95,7 +97,7 @@ void parseHistoryTotalRecord(const uint8_t* payloadBytes, uint16_t payloadBytesL
 
   sentence->sentence.historyTotal->totalYieldUser=le32toh(*((uint32_t*) payloadBytes));
   sentence->sentence.historyTotal->totalYieldSystem=le32toh(*((uint32_t*) payloadBytes+4));
-//  DEBUG("\ttotalYieldSystem=%d\n", totalYieldSystem);
+//  DEBUG_PRINTD(TAG,"\ttotalYieldSystem=%d\n", totalYieldSystem);
   sentence->sentence.historyTotal->maxPanelVoltage=le16toh(*((uint32_t*) payloadBytes+8));
   sentence->sentence.historyTotal->maxBatteryVoltage=le16toh(*((uint32_t*) payloadBytes+10));
   sentence->sentence.historyTotal->numberOfDaysAvailable=le16toh(*((uint32_t*) payloadBytes+12));
@@ -135,8 +137,8 @@ void parseHistoryDayRecord(const uint8_t* payloadBytes, uint16_t payloadBytesLen
 }
 
 void parseGroupId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  DEBUG("\tparseGroupId\n");
-  DEBUG("\tgroupId=%d\n", *payloadBytes);
+  DEBUG_PRINTD(TAG,"\tparseGroupId\n");
+  DEBUG_PRINTD(TAG,"\tgroupId=%d\n", *payloadBytes);
 
   sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
   sentence->sentence.unsignedRegister=new UnSignedRegister();
@@ -144,8 +146,8 @@ void parseGroupId(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, V
 }
 
 void parseSerialNumber(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  DEBUG("\tparseSerialNumber\n");
-  DEBUG("\tserialNumber='%.*s'\n", payloadBytesLen, (char*) payloadBytes);
+  DEBUG_PRINTD(TAG,"\tparseSerialNumber\n");
+  DEBUG_PRINTD(TAG,"\tserialNumber='%.*s'\n", payloadBytesLen, (char*) payloadBytes);
 //  hexdump("payloadBytes", payloadBytes, payloadBytesLen);
 
   sentence->type=VHParsedSentence::STRING;
@@ -153,26 +155,26 @@ void parseSerialNumber(const uint8_t* payloadBytes, const uint16_t payloadBytesL
 }
 
 void parseModelName(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  DEBUG("\tparseModelName\n");
-  DEBUG("\tmodelName=%.*s\n", payloadBytesLen, (char*) payloadBytes);
+  DEBUG_PRINTD(TAG,"\tparseModelName\n");
+  DEBUG_PRINTD(TAG,"\tmodelName=%.*s\n", payloadBytesLen, (char*) payloadBytes);
   sentence->type=VHParsedSentence::STRING;
   sentence->sentence.stringValue=new std::string((const char*) payloadBytes, payloadBytesLen);
 
 }
 
 void parseCapabilities(const uint8_t* payloadBytes, const uint16_t payloadBytesLen, VHParsedSentence* sentence){
-  DEBUG("\tparseCapabilities\n");
+  DEBUG_PRINTD(TAG,"\tparseCapabilities\n");
   sentence->type=VHParsedSentence::UNSIGNED_REGISTER;
   sentence->sentence.unsignedRegister=new UnSignedRegister();
   sentence->sentence.unsignedRegister->value=le32toh(*(uint32_t*)payloadBytes);
 
-  DEBUG("\tcapabilities=0x%X\n", sentence->sentence.unsignedRegister->value);
+  DEBUG_PRINTD(TAG,"\tcapabilities=0x%X\n", sentence->sentence.unsignedRegister->value);
 }
 
 VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
-  DEBUG("Parse GET response\n");
+  DEBUG_PRINTD(TAG,"Parse GET response\n");
   if(payloadBytesLen<5){
-    DEBUG("Got a GET response but the payload length is wrong. %d bytes\n", payloadBytesLen);
+    DEBUG_PRINTD(TAG,"Got a GET response but the payload length is wrong. %d bytes\n", payloadBytesLen);
     return NULL;
   }
   payloadBytes+=1; //Skip command
@@ -181,15 +183,15 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
   payloadBytes+=2;
   const RegisterDesc* registerDesc=lookupRegister(registerId);
   if(registerDesc==NULL){
-    DEBUG("Don't know how to decode register 0x%04X\n", registerId);
+    DEBUG_PRINTD(TAG,"Don't know how to decode register 0x%04X\n", registerId);
     return NULL;
   }
 
   uint8_t flag=*payloadBytes;
   payloadBytes+=1;
-  DEBUG("registerId=0x%04X flag=%d\n", registerId, flag);
+  DEBUG_PRINTD(TAG,"registerId=0x%04X flag=%d\n", registerId, flag);
   if(flag!=0){
-    DEBUG("Something is wrong with that flag");
+    DEBUG_PRINTD(TAG,"Something is wrong with that flag");
     return NULL;
   }
   payloadBytesLen-=4;
@@ -253,14 +255,14 @@ VHParsedSentence* parseGet(const uint8_t* payloadBytes, uint16_t payloadBytesLen
     payloadBytes+=registerDesc->byteLen;
   }
   else{
-    DEBUG("Unhandeled combination of byte len %d encoding %d and register 0x%X\n", registerDesc->byteLen, registerDesc->encoding, sentence->registerId);
+    DEBUG_PRINTD(TAG,"Unhandeled combination of byte len %d encoding %d and register 0x%X\n", registerDesc->byteLen, registerDesc->encoding, sentence->registerId);
     exit(1);
   }
   return sentence;
 }
 
 VHParsedSentence* parseAsync(const uint8_t* payloadBytes, const uint16_t payloadBytesLen){
-  DEBUG("Parse ASYNC response\n");
+  DEBUG_PRINTD(TAG,"Parse ASYNC response\n");
   VHParsedSentence* sentence=parseGet(payloadBytes, payloadBytesLen);
   if(sentence){
     sentence->isAsync=true;
@@ -269,7 +271,7 @@ VHParsedSentence* parseAsync(const uint8_t* payloadBytes, const uint16_t payload
 }
 
 VHParsedSentence* parseDone(const uint8_t* payloadBytes){
-  DEBUG("TODO Parse DONE response\n");
+  DEBUG_PRINTD(TAG,"TODO Parse DONE response\n");
   //Parsing DONE messages depends on the last command we sent...
   VHParsedSentence* sentence=new VHParsedSentence(0);
   sentence->type=VHParsedSentence::DONE;
@@ -277,13 +279,13 @@ VHParsedSentence* parseDone(const uint8_t* payloadBytes){
 }
 
 VHParsedSentence* parsePong(const uint8_t* payloadBytes){
-  DEBUG("Parse pong\n");
+  DEBUG_PRINTD(TAG,"Parse pong\n");
   VHParsedSentence* sentence=new VHParsedSentence(0);
   sentence->type=VHParsedSentence::PONG;
   sentence->sentence.pingResponse=new ParsedSentencePingResponse();
 
   sentence->sentence.pingResponse->typeAndVersion=le16toh(*(uint16_t*)(payloadBytes+1));
-  DEBUG("\ttypeAndVersion=0x%04X\n", sentence->sentence.pingResponse->typeAndVersion);
+  DEBUG_PRINTD(TAG,"\ttypeAndVersion=0x%04X\n", sentence->sentence.pingResponse->typeAndVersion);
   sentence->sentence.pingResponse->appType=sentence->sentence.pingResponse->typeAndVersion>>14;
   if(3==sentence->sentence.pingResponse->appType){
     sentence->sentence.pingResponse->rcVersion=payloadBytes[1]&0b00111111;
@@ -293,9 +295,9 @@ VHParsedSentence* parsePong(const uint8_t* payloadBytes){
 
 #if 0
 VHParsedSentence* parseAppVersion(const uint8_t* payloadBytes, uint16_t payloadBytesLen){
-  DEBUG("Got AppVersion message\n");
+  DEBUG_PRINTD(TAG,"Got AppVersion message\n");
   uint16_t appversion=le16toh(*(uint16_t*)(payloadBytes+1));
-  DEBUG("\tFirmware version=0x%04X\n", appversion);
+  DEBUG_PRINTD(TAG,"\tFirmware version=0x%04X\n", appversion);
   VHParsedSentence* sentence=new VHParsedSentence(0);
   sentence->type=VHParsedSentence::FIRMWARE_VERSION;
   return sentence;
@@ -306,18 +308,19 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   if(hexLine==NULL) {
     return NULL;
   }
-  DEBUG("Parsing '%s'", hexLine);
+  DEBUG_PRINTD(TAG,"Parsing '%s'", hexLine); //Do not output the trailing \n
 
+  //Skip leading junk
   while(hexLine[0]!='\0' && hexLine[0]!=':'){
     hexLine++;
   }
   int hexLineLen=strlen(hexLine);
   if(hexLine[0]!=':' || hexLine[hexLineLen-1]!='\n'){
-    DEBUG("The hexline length should start with ':' end with '\\n' and be of odd length, ignoring.\n");
+    DEBUG_PRINTD(TAG,"The hexline length should start with ':' end with '\\n' and be of odd length, ignoring.\n");
     return NULL;
   }
   if(hexLineLen<5){
-    DEBUG("Hexline is too short\n");
+    DEBUG_PRINTD(TAG,"Hexline is too short\n");
     return NULL;
   }
 
@@ -330,7 +333,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   std::basic_string<unsigned char> payloadNoChecksum(payloadBytes, payloadBytesLen-1);
   uint8_t computedChecksum=computeChecksum(payloadNoChecksum); //Do not use the checksum byte to compute the the checksum
   if(payloadBytes[payloadBytesLen-1]!=computedChecksum){
-    DEBUG("Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
+    DEBUG_PRINTD(TAG,"Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
     free(payloadBytes);
     return NULL;
   }
@@ -351,7 +354,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   }
 #endif
   else if(HEXRSP_ERROR==payloadBytes[0]) {
-    DEBUG("Got HEXRSP_ERROR message. Checksum was wrong\n");
+    DEBUG_PRINTD(TAG,"Got HEXRSP_ERROR message. Checksum was wrong\n");
     sentence=new VHParsedSentence(0);
     sentence->type=VHParsedSentence::ERROR;
   }
@@ -361,7 +364,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
 
   free(payloadBytes);
   if(sentence==NULL || sentence->type==VHParsedSentence::SentenceType::NONE){
-    DEBUG("Unknown/Unhandled HEX command %s\n", hexLine);
+    DEBUG_PRINTD(TAG,"Unknown/Unhandled HEX command %s\n", hexLine);
 //    exit(1);
   }
   return sentence;

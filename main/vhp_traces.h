@@ -4,10 +4,12 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#if 1
-#define DEBUG printf
+#ifdef ESP_PLATFORM
+#include <esp_log.h>
+#define DEBUG_PRINTD ESP_LOGD
 #else
-#define DEBUG //
+#define DEBUG_PRINTD printf
+//#define DEBUG_PRINTD //
 #endif
 
 void assertEquals(const char* expected, const char* actual, const char* failureMsg);
