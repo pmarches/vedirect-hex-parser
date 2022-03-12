@@ -8,8 +8,7 @@
 #include <esp_log.h>
 #define DEBUG_PRINTD ESP_LOGD
 #else
-#define DEBUG_PRINTD printf
-//#define DEBUG_PRINTD //
+#define DEBUG_PRINTD(TAG,ARGS...) printf(ARGS)
 #endif
 
 void assertEquals(const char* expected, const char* actual, const char* failureMsg);

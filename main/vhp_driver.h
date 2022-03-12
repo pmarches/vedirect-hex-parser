@@ -49,7 +49,7 @@ public:
 };
 
 
-#ifdef LINUX
+#ifndef ESP_PLATFORM
 class LinuxSerial : public VHPSerial {
 public:
   LinuxSerial();

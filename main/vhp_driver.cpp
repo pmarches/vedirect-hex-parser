@@ -156,7 +156,7 @@ void VHPDriver::registerAsyncSentenceHandler(void (*onAsyncHandler)(VHParsedSent
   this->onAsyncHandler=onAsyncHandler;
 }
 
-#ifdef LINUX
+#ifndef ESP_PLATFORM
 LinuxSerial::LinuxSerial() :serialFd(0) {}
 LinuxSerial::~LinuxSerial() {}
 void LinuxSerial::configure(){
