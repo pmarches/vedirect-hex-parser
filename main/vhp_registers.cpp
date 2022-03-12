@@ -1,6 +1,10 @@
 #include <cstddef>
+#include <map>
 
 #include "vhp_registers.h"
+
+std::map<uint16_t, const RegisterDesc*> registerMap;
+std::map<uint16_t, const ProductDescription*> productMap;
 
 const RegisterDesc registerDescriptions[]={
     {0x0100, 1, 4, UNSIGNED, "", "Product Id"   },
@@ -172,19 +176,17 @@ const RegisterDesc registerDescriptions[]={
     {0x2015, 0.1  , 2, UNSIGNED, "A ", "Charge current limit"},
     {0x2018, 1    , 1, UNSIGNED, "- ", "Manual equalisation pending"},
     {0x2027, 0.01 , 4, UNSIGNED, "W ", "Total DC input power"},
-
 };
 
 const RegisterDesc* lookupRegister(uint16_t registerId){
-  //TODO use an index
-  uint16_t nbRegisterDesc=sizeof(registerDescriptions)/sizeof(RegisterDesc);
-  for(int i=0; i<nbRegisterDesc; i++){
-    const RegisterDesc* it=&registerDescriptions[i];
-    if(it->registerValue==registerId){
-      return it;
+  if(registerMap.empty()){
+    uint16_t nbRegisterDesc=sizeof(registerDescriptions)/sizeof(RegisterDesc);
+    for(int i=0; i<nbRegisterDesc; i++){
+      const RegisterDesc* it=&registerDescriptions[i];
+      registerMap[it->registerValue]=it;
     }
   }
-  return NULL;
+  return registerMap[registerId];
 }
 
 const ProductDescription PRODUCT_DESC[]={
@@ -240,12 +242,12 @@ const ProductDescription PRODUCT_DESC[]={
 };
 
 const ProductDescription* lookupProductId(uint16_t productId){
-  uint16_t nbProductDesc=sizeof(PRODUCT_DESC)/sizeof(ProductDescription);
-  for(int i=0; i<nbProductDesc; i++){
-    const ProductDescription* it=&PRODUCT_DESC[i];
-    if(it->productId==productId){
-      return it;
+  if(registerMap.empty()){
+    uint16_t nbProductDesc=sizeof(PRODUCT_DESC)/sizeof(ProductDescription);
+    for(int i=0; i<nbProductDesc; i++){
+      const ProductDescription* it=&PRODUCT_DESC[i];
+      productMap[it->productId]=it;
     }
   }
-  return NULL;
+  return productMap[productId];
 }
