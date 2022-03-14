@@ -332,7 +332,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   std::basic_string<unsigned char> payloadNoChecksum(payloadBytes, payloadBytesLen-1);
   uint8_t computedChecksum=computeChecksum(payloadNoChecksum); //Do not use the checksum byte to compute the the checksum
   if(payloadBytes[payloadBytesLen-1]!=computedChecksum){
-    DEBUG_PRINTD(TAG,"Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
+    DEBUG_PRINTE(TAG,"Checksum error: Received checksum 0x%02X but computed 0x%02X\n", payloadBytes[payloadBytesLen-1], computedChecksum);
     free(payloadBytes);
     return NULL;
   }
@@ -353,7 +353,7 @@ VHParsedSentence* parseHexLine(const char* hexLine){
   }
 #endif
   else if(HEXRSP_ERROR==payloadBytes[0]) {
-    DEBUG_PRINTD(TAG,"Got HEXRSP_ERROR message. Checksum was wrong\n");
+    DEBUG_PRINTE(TAG,"Got HEXRSP_ERROR message. Checksum was wrong\n");
     sentence=new VHParsedSentence(0);
     sentence->type=VHParsedSentence::ERROR;
   }

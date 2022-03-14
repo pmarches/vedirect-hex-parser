@@ -7,8 +7,10 @@
 #ifdef ESP_PLATFORM
 #include <esp_log.h>
 #define DEBUG_PRINTD ESP_LOGD
+#define DEBUG_PRINTE ESP_LOGE
 #else
 #define DEBUG_PRINTD(TAG,ARGS...) printf(ARGS)
+#define DEBUG_PRINTE(TAG,ARGS...) printf(ARGS)
 #endif
 
 void assertEquals(const char* expected, const char* actual, const char* failureMsg);
