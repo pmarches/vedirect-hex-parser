@@ -7,16 +7,16 @@
 class VHPBatchStreaming {
 public:
   VHPBatchStreaming(VHPSerial* serial);
-
+  void addCommandToSend(std::string& hexCommandToSend);
+  void setSentenceHandler((void)(const std::string&, const VHParsedSentence*));
 };
 
-void myHandler(VHParsedSentence* sentence){
-
+void myHandler(const std::string& hexLine, const VHParsedSentence* sentence){
 }
 
 void testBatchStreaming(){
   std::string manyHexLines=VHPBatchCommands();
   VHPBatchStreaming streaming(&serial);
-  serial.write(manyHexLines);
-  streaming.streamFromSerialToHandler(myHandler);
+  streaming.addCommandToSend(":154\n");
+  streaming.setSentenceHandler(myHandler);
 }
