@@ -22,6 +22,7 @@ public:
   virtual void configure()=0;
   virtual void writeHexLine(const std::string& hexLine)=0;
   virtual const std::string readLine()=0;
+  virtual const std::string readBufferFully()=0;
   void sendPayload(const std::basic_string<unsigned char>& payload);
 };
 

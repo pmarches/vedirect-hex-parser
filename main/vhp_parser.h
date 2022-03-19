@@ -1,6 +1,8 @@
 #ifndef VHP_PARSER_H_
 #define VHP_PARSER_H_
 
+#include <inttypes.h>
+
 enum VEDIRECT_HEX_COMMAND {
     HEXCMD_ENTER_BOOT=0x0,
     HEXCMD_DONE=0x1,
